@@ -77,5 +77,35 @@ class UserService:
         u = self.session.get(User, user_id)
         if not u:
             raise ValueError('User not found')
-        self.session.delete(u)
-        self.session.flush()
+        # Conservative behaviour: refuse deletion if the user is referenced
+        # by contracts, events or customers. Provide a clear error message
+        # instead of letting the DB raise IntegrityError and put the
+        # session into a dirty state.
+        from app.models.contract import Contract
+        from app.models.event import Event
+        from app.models.customer import Customer
+
+        contracts_count = self.session.query(Contract).filter(Contract.user_management_id == user_id).count()
+        events_count = self.session.query(Event).filter(Event.user_support_id == user_id).count()
+        customers_count = self.session.query(Customer).filter(Customer.user_sales_id == user_id).count()
+
+        total_refs = contracts_count + events_count + customers_count
+        if total_refs > 0:
+            parts = []
+            if contracts_count:
+                parts.append(f"{contracts_count} contrat(s)")
+            if events_count:
+                parts.append(f"{events_count} évènement(s)")
+            if customers_count:
+                parts.append(f"{customers_count} client(s)")
+            raise ValueError(
+                "Impossible de supprimer l'utilisateur : il est référencé par " + ", ".join(parts) + "."
+            )
+
+        try:
+            self.session.delete(u)
+            self.session.flush()
+        except Exception:
+            # Ensure session is usable after unexpected DB errors
+            self.session.rollback()
+            raise

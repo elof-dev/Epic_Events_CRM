@@ -1,11 +1,11 @@
-from .customers import manage_customers_menu
-from .contracts import manage_contracts_menu
-from .events import manage_events_menu
-from .users import manage_users_menu
+from .customers import main_customer_menu
+from .contracts import main_contract_menu
+from .events import main_event_menu
+from .users import main_user_menu
 
 __all__ = [
-	'manage_customers_menu',
-	'manage_contracts_menu',
-	'manage_events_menu',
-	'manage_users_menu',
+    'main_customer_menu',
+    'main_contract_menu',
+    'main_event_menu',
+    'main_user_menu',
 ]

@@ -1,65 +1,220 @@
 from app.services.event_service import EventService
 import click
 from datetime import datetime
+from cli.helpers import prompt_select_option
 
 
-def manage_events_menu(user, session, perm_service):
+def main_event_menu(user, session, perm_service):
     click.echo('\n=== Gestion des évènements ===')
-    event_service = EventService(session, perm_service)
     while True:
-        click.echo('1. Afficher tous les évènements')
+        options = get_event_menu_options(user, perm_service)
+        action = prompt_select_option(options, prompt='Choix')
+        if action is None:
+            return
+        if action == 'all':
+            list_all_events(user, session, perm_service)
+        elif action == 'mine':
+            my_events(user, session, perm_service)
+        elif action == 'create':
+            create_event(user, session, perm_service)
+        elif action == 'nosupport':
+            events_without_support(user, session, perm_service)
+
+
+def get_event_menu_options(user, perm_service):
+    """Return the list of (label, action) menu options for the given user.
+
+    This is extracted to a helper to make unit testing the CLI menu easier.
+    """
+    options = []
+    if perm_service.user_has_permission(user, 'event:read'):
+        options.append(('Afficher tous les évènements', 'all'))
         if user.role.name == 'support':
-            click.echo('2. Mes évènements')
-            opt_offset = 1
-        else:
-            opt_offset = 0
-        click.echo(f"{3+opt_offset}. Créer un évènement")
-        click.echo(f"{4+opt_offset}. Evènements sans support assigned (management only)")
-        click.echo(f"{5+opt_offset}. Retour")
-        choice = click.prompt('Choix', type=int)
-        if choice == 1:
-            events = event_service.list_all(user)
-            print_events(events)
-        elif choice == 2 and opt_offset == 1:
-            events = event_service.list_mine(user)
-            print_events(events)
-        elif choice == 3 + opt_offset:
-            # create event
-            try:
-                contract_id = int(click.prompt('ID du contrat lié'))
-                event_name = click.prompt('Nom de l\'évènement')
-                event_number = click.prompt('Numéro d\'évènement')
-                start_raw = click.prompt('Date/heure de début (YYYY-MM-DD HH:MM)')
-                end_raw = click.prompt('Date/heure de fin (YYYY-MM-DD HH:MM)')
-                start_dt = datetime.fromisoformat(start_raw.replace(' ', 'T'))
-                end_dt = datetime.fromisoformat(end_raw.replace(' ', 'T'))
-                location = click.prompt('Lieu', default='')
-                attendees = click.prompt('Nombre participants', default='0')
-                support_id_raw = click.prompt('ID support (optionnel)', default='')
-                fields = {
-                    'contract_id': contract_id,
-                    'event_name': event_name,
-                    'event_number': event_number,
-                    'start_datetime': start_dt,
-                    'end_datetime': end_dt,
-                    'location': location or None,
-                    'attendees': int(attendees) if attendees else None,
-                    'user_support_id': int(support_id_raw) if support_id_raw else None,
-                }
-                new_e = event_service.create(user, **fields)
-                click.echo(f'Evènement créé id={new_e.id}')
-            except Exception as e:
-                click.echo(f'Erreur création: {e}')
-        elif choice == 4 + opt_offset:
-            # events without support
-            all_events = event_service.list_all(user)
-            no_support = [e for e in all_events if e.user_support_id is None]
-            print_events(no_support)
-        else:
-            break
+            options.append(('Mes évènements', 'mine'))
+    if user.role.name == 'sales' and perm_service.user_has_permission(user, 'event:create'):
+        options.append(('Créer un évènement', 'create'))
+    if user.role.name == 'management' and perm_service.user_has_permission(user, 'event:read'):
+        options.append(('Evènements sans support assigned', 'nosupport'))
+    return options
+def create_event(user, session, perm_service):
+    event_service = EventService(session, perm_service)
+    if not perm_service.user_has_permission(user, 'event:create'):
+        click.echo('Permission refusée: création impossible')
+        return
+    try:
+        contract_id = int(click.prompt('ID du contrat lié'))
+        event_name = click.prompt('Nom de l\'évènement')
+        event_number = click.prompt('Numéro d\'évènement')
+        start_raw = click.prompt('Date/heure de début (YYYY-MM-DD HH:MM)')
+        end_raw = click.prompt('Date/heure de fin (YYYY-MM-DD HH:MM)')
+        start_dt = datetime.fromisoformat(start_raw.replace(' ', 'T'))
+        end_dt = datetime.fromisoformat(end_raw.replace(' ', 'T'))
+        location = click.prompt('Lieu', default='')
+        attendees = click.prompt('Nombre participants', default='0')
+        support_id_raw = click.prompt('ID support (optionnel)', default='')
+        fields = {
+            'contract_id': contract_id,
+            'event_name': event_name,
+            'event_number': event_number,
+            'start_datetime': start_dt,
+            'end_datetime': end_dt,
+            'location': location or None,
+            'attendees': int(attendees) if attendees else None,
+            'user_support_id': int(support_id_raw) if support_id_raw else None,
+        }
+        new_e = event_service.create(user, **fields)
+        click.echo(f'Evènement créé id={new_e.id}')
+    except Exception as e:
+        click.echo(f'Erreur création: {e}')
 
 
-def print_events(events):
+def list_all_events(user, session, perm_service):
+    event_service = EventService(session, perm_service)
+    try:
+        events = event_service.list_all(user)
+        display_list_events(events)
+        opts = [(f"{e.id}: {e.event_name}", e.id) for e in events]
+        choice = prompt_select_option(opts, prompt='Choisir évènement')
+        if choice is None:
+            return
+        display_detail_events(user, session, perm_service, choice)
+    except Exception as e:
+        click.echo(f'Erreur: {e}')
+
+
+def my_events(user, session, perm_service):
+    event_service = EventService(session, perm_service)
+    try:
+        events = event_service.list_mine(user)
+        display_list_events(events)
+        opts = [(f"{e.id}: {e.event_name}", e.id) for e in events]
+        choice = prompt_select_option(opts, prompt='Choisir évènement')
+        if choice is None:
+            return
+        display_detail_events(user, session, perm_service, choice)
+    except Exception as e:
+        click.echo(f'Erreur: {e}')
+
+
+def events_without_support(user, session, perm_service):
+    event_service = EventService(session, perm_service)
+    try:
+        events = [e for e in event_service.list_all(user) if e.user_support_id is None]
+        display_list_events(events)
+        opts = [(f"{e.id}: {e.event_name}", e.id) for e in events]
+        choice = prompt_select_option(opts, prompt='Choisir évènement')
+        if choice is None:
+            return
+        display_detail_events(user, session, perm_service, choice)
+    except Exception as e:
+        click.echo(f'Erreur: {e}')
+
+
+def display_list_events(events):
     click.echo('\nEvènements:')
     for e in events:
-        click.echo(f"{e.id}: {e.event_name} - {e.event_number} client={e.customer_id} support={e.user_support_id}")
+        print_event(e)
+
+
+def display_detail_events(current_user, session, perm_service, event_id):
+    from app.models.event import Event
+    event_service = EventService(session, perm_service)
+    event = session.get(Event, event_id)
+    if not event:
+        click.echo('Evènement introuvable')
+        return
+    click.echo(f"\nID: {event.id}\nNom: {event.event_name}\nNuméro: {event.event_number}\nContract: {event.contract_id}\nClient: {event.customer_id}\nDébut: {event.start_datetime}\nFin: {event.end_datetime}\nLieu: {event.location}\nParticipants: {event.attendees}\nSupport: {event.user_support_id}")
+    can_update = perm_service.user_has_permission(current_user, 'event:update')
+    can_delete = perm_service.user_has_permission(current_user, 'event:delete')
+    actions = []
+    if can_update:
+        actions.append(('Modifier', 'update'))
+    if can_delete:
+        actions.append(('Supprimer', 'delete'))
+    action = prompt_select_option(actions, prompt='Choix')
+    if action is None:
+        return
+    if action == 'update':
+        update_event(current_user, session, perm_service, event_id)
+    elif action == 'delete':
+        delete_event(current_user, session, perm_service, event_id)
+
+
+def update_event(current_user, session, perm_service, event_id):
+    from app.models.event import Event
+    event_service = EventService(session, perm_service)
+    event = session.get(Event, event_id)
+    if not event:
+        click.echo('Evènement introuvable')
+        return
+    if not perm_service.user_has_permission(current_user, 'event:update'):
+        click.echo('Permission refusée: mise à jour impossible')
+        return
+    # management can only update support assignment
+    if current_user.role.name == 'management':
+        new_support = click.prompt('ID nouveau support (laisser vide pour annuler)', default='')
+        if not new_support:
+            click.echo('Annulé')
+            return
+        try:
+            event_service.update(current_user, event.id, user_support_id=int(new_support))
+            click.echo('Support mis à jour')
+        except Exception as e:
+            click.echo(f'Erreur mise à jour: {e}')
+        return
+
+    mod_fields = [
+        ('Nom', 'event_name'),
+        ('Numéro', 'event_number'),
+        ('Début (YYYY-MM-DD HH:MM)', 'start_datetime'),
+        ('Fin (YYYY-MM-DD HH:MM)', 'end_datetime'),
+        ('Lieu', 'location'),
+        ('Participants', 'attendees'),
+        ('ID support', 'user_support_id'),
+    ]
+    while True:
+        field_opts = [(label, field) for label, field in mod_fields]
+        field_choice = prompt_select_option(field_opts, prompt='Choisir champ')
+        if field_choice is None:
+            break
+        label = next(lbl for lbl, fld in mod_fields if fld == field_choice)
+        field = field_choice
+        current_val = getattr(event, field)
+        new_raw = click.prompt(label, default=str(current_val) if current_val is not None else '')
+        if field in ('start_datetime', 'end_datetime') and new_raw:
+            val = datetime.fromisoformat(new_raw.replace(' ', 'T'))
+        elif field == 'attendees':
+            val = int(new_raw) if new_raw else None
+        elif field == 'user_support_id':
+            val = int(new_raw) if new_raw else None
+        else:
+            val = new_raw
+        try:
+            event_service.update(current_user, event.id, **{field: val})
+            click.echo('Champ mis à jour')
+            event = session.get(Event, event_id)
+        except Exception as e:
+            click.echo(f'Erreur mise à jour: {e}')
+
+
+def delete_event(current_user, session, perm_service, event_id):
+    from app.models.event import Event
+    event_service = EventService(session, perm_service)
+    event = session.get(Event, event_id)
+    if not event:
+        click.echo('Evènement introuvable')
+        return
+    if not perm_service.user_has_permission(current_user, 'event:delete'):
+        click.echo('Permission refusée: suppression impossible')
+        return
+    try:
+        confirm = click.prompt('Confirmer suppression ? (o/n)', default='n')
+        if confirm.lower().startswith('o'):
+            event_service.delete(current_user, event.id)
+            click.echo('Evènement supprimé')
+    except Exception as e:
+        click.echo(f'Erreur suppression: {e}')
+
+
+def print_event(e):
+    click.echo(f"{e.id}: {e.event_name} - {e.event_number} client={e.customer_id} support={e.user_support_id}")

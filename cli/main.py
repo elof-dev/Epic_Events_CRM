@@ -6,12 +6,7 @@ from app.services.permission_service import PermissionService
 from app.services.customer_service import CustomerService
 from app.services.contract_service import ContractService
 from app.services.event_service import EventService
-from cli.views import (
-    manage_users_menu,
-    manage_customers_menu,
-    manage_contracts_menu,
-    manage_events_menu,
-)
+from cli.crm_interface import run_interface
 
 
 def get_session():
@@ -33,36 +28,8 @@ def prompt_login(session):
     return user
 
 
-def show_main_menu(user, session):
-    perm_service = PermissionService(session)
-    cust_service = CustomerService(session, perm_service)
-    contract_service = ContractService(session, perm_service)
-    event_service = EventService(session, perm_service)
-
-    while True:
-        services = perm_service.available_services_for_user(user)
-        click.echo('\nMenu principal :')
-        options = []
-        if 'manage_users' in services:
-            options.append(('Gestion des utilisateurs', manage_users_menu))
-        if 'manage_customers' in services:
-            options.append(('Gestion des clients', manage_customers_menu))
-        if 'manage_contracts' in services:
-            options.append(('Gestion des contrats', manage_contracts_menu))
-        if 'manage_events' in services:
-            options.append(('Gestion des évènements', manage_events_menu))
-        for idx, (label, _) in enumerate(options, start=1):
-            click.echo(f"{idx}. {label}")
-        click.echo(f"{len(options)+1}. Déconnexion")
-        choice = click.prompt("Choix", type=int)
-        if choice == len(options) + 1:
-            click.echo("Déconnexion...")
-            break
-        if 1 <= choice <= len(options):
-            _, handler = options[choice-1]
-            handler(user, session, perm_service)
-        else:
-            click.echo("Choix invalide")
+# The main top-level orchestration has been moved to `cli.crm_interface.run_interface`.
+# This keeps `cli.main` as a thin CLI entrypoint.
 
 
 
@@ -74,15 +41,9 @@ def cli():
 
 @cli.command()
 def run():
-    """Lancer l'interface CLI en français"""
-    session = get_session()
-    try:
-        user = prompt_login(session)
-        if not user:
-            return
-        show_main_menu(user, session)
-    finally:
-        session.close()
+    """Lancer l'interface CLI"""
+    # delegate to crm_interface
+    run_interface()
 
 
 if __name__ == "__main__":

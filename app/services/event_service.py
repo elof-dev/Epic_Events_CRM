@@ -26,6 +26,14 @@ class EventService:
             raise ValueError("Event not found")
         if not self.perm.can_update_event(user, event, list(fields.keys())):
             raise PermissionError("User not allowed to update this event")
+
+        # Business rule: users with role 'management' may only modify `user_support_id`.
+        if getattr(user, 'role', None) and getattr(user.role, 'name', None) == 'management':
+            allowed = {'user_support_id'}
+            invalid = [k for k in fields.keys() if k not in allowed]
+            if invalid:
+                raise PermissionError("Management can only modify user_support_id")
+
         return self.repo.update(event, **fields)
 
     def delete(self, user, event_id: int):

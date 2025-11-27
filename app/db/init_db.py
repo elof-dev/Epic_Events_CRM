@@ -15,7 +15,6 @@ from app.config import DB_HOST, DB_PORT, DB_USER, DB_PASS, DB_NAME
 
 
 def drop_create_database():
-    # connect to server without specifying a DB
     conn = pymysql.connect(host=DB_HOST, port=DB_PORT, user=DB_USER, password=DB_PASS or "")
     try:
         with conn.cursor() as cur:
@@ -45,7 +44,6 @@ def seed(session):
     session.add_all(perm_objs.values())
     session.flush()
 
-    # assign permissions according to permissions.md
     # management: user CRUD, contract CRUD, customer read, event read/update (only support id)
     mg_perms = [
         perm_objs[p] for p in ["user:create","user:read","user:update","user:delete",
