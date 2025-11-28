@@ -45,7 +45,7 @@ def create_customer(user, session, perm_service):
             'customer_last_name': last,
             'email': email,
             'company_name': company,
-            'phone': phone or None,
+            'phone_number': phone or None,
         }
         new_c = cust_service.create(user, **fields)
         click.echo(f'Client créé id={new_c.id}')
@@ -101,7 +101,6 @@ def display_detail_customers(user, session, perm_service, customer_id):
         actions.append(('Modifier', 'update'))
     if perm_service.can_delete_customer(user, customer):
         actions.append(('Supprimer', 'delete'))
-    actions.append(('Imprimer', 'print'))
 
     action = prompt_select_option(actions, prompt='Choix')
     if action is None:
@@ -110,8 +109,6 @@ def display_detail_customers(user, session, perm_service, customer_id):
         update_customer(user, session, perm_service, customer_id)
     elif action == 'delete':
         delete_customer(user, session, perm_service, customer_id)
-    elif action == 'print':
-        print_customer(customer)
 
 
 def update_customer(user, session, perm_service, customer_id):
@@ -129,7 +126,7 @@ def update_customer(user, session, perm_service, customer_id):
         ('Nom', 'customer_last_name'),
         ('Email', 'email'),
         ('Entreprise', 'company_name'),
-        ('Téléphone', 'phone'),
+        ('Téléphone', 'phone_number'),
     ]
     updates = {}
     while True:

@@ -7,6 +7,7 @@ from app.services.customer_service import CustomerService
 from app.services.contract_service import ContractService
 from app.services.event_service import EventService
 from cli.crm_interface import run_interface
+from app.db import init_db as init_db_module
 
 
 def get_session():
@@ -44,6 +45,14 @@ def run():
     """Lancer l'interface CLI"""
     # delegate to crm_interface
     run_interface()
+
+
+@cli.command('init-db')
+def init_db():
+    """Initialiser la base de données (DROP + CREATE + SEED)."""
+    click.echo('Initialisation de la base de données (DROP + CREATE + SEED)...')
+    init_db_module.main()
+    click.echo('Initialisation terminée.')
 
 
 if __name__ == "__main__":
