@@ -1,6 +1,7 @@
 from app.services.user_service import UserService
 import click
 from cli.helpers import prompt_select_option
+from app.db.transaction import transactional
 
 
 def get_user_menu_options(user, perm_service):
@@ -51,7 +52,8 @@ def create_user(user, session, perm_service):
             'role_name': role_name,
             'password': password,
         }
-        new_u = user_service.create(user, **fields)
+        with transactional(session):
+            new_u = user_service.create(user, **fields)
         click.echo(f'Utilisateur créé id={new_u.id}')
     except Exception as e:
         click.echo(f'Erreur création: {e}')
@@ -154,7 +156,8 @@ def update_user(current_user, session, perm_service, target_user_id):
             else:
                 upd = {field: new_val or None}
         try:
-            user_service.update(current_user, target.id, **upd)
+            with transactional(session):
+                user_service.update(current_user, target.id, **upd)
             click.echo('Champ mis à jour')
             target = session.get(User, target_user_id)
         except Exception as e:
@@ -174,7 +177,8 @@ def delete_user(current_user, session, perm_service, target_user_id):
     try:
         confirm = click.prompt('Confirmer suppression ? (o/n)', default='n')
         if confirm.lower().startswith('o'):
-            user_service.delete(current_user, target.id)
+            with transactional(session):
+                user_service.delete(current_user, target.id)
             click.echo('Utilisateur supprimé')
     except Exception as e:
         click.echo(f'Erreur suppression: {e}')

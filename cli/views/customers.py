@@ -1,6 +1,7 @@
 from app.services.customer_service import CustomerService
 import click
 from cli.helpers import prompt_select_option
+from app.db.transaction import transactional
 
 
 def get_customer_menu_options(user, perm_service):
@@ -47,7 +48,8 @@ def create_customer(user, session, perm_service):
             'company_name': company,
             'phone_number': phone or None,
         }
-        new_c = cust_service.create(user, **fields)
+        with transactional(session):
+            new_c = cust_service.create(user, **fields)
         click.echo(f'Client créé id={new_c.id}')
     except Exception as e:
         click.echo(f'Erreur création: {e}')
@@ -140,7 +142,8 @@ def update_customer(user, session, perm_service, customer_id):
         new_val = click.prompt(label, default=str(current_val) if current_val is not None else '')
         updates[field] = new_val or None
         try:
-            cust_service.update(user, customer.id, **updates)
+            with transactional(session):
+                cust_service.update(user, customer.id, **updates)
             click.echo('Client mis à jour')
             customer = session.get(Customer, customer_id)
         except Exception as e:
@@ -160,7 +163,8 @@ def delete_customer(user, session, perm_service, customer_id):
     try:
         confirm = click.prompt('Confirmer suppression ? (o/n)', default='n')
         if confirm.lower().startswith('o'):
-            cust_service.delete(user, customer.id)
+            with transactional(session):
+                cust_service.delete(user, customer.id)
             click.echo('Client supprimé')
     except Exception as e:
         click.echo(f'Erreur: {e}')

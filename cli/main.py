@@ -43,16 +43,13 @@ def cli():
 @cli.command()
 def run():
     """Lancer l'interface CLI"""
+    # réinitialiser la base de données à chaque démarrage (DROP + CREATE + SEED)
+    click.echo('Réinitialisation de la base de données (DROP + CREATE + SEED)...')
+    init_db_module.main()
+    click.echo('Réinitialisation terminée. Démarrage de l\'interface...')
     # delegate to crm_interface
     run_interface()
 
-
-@cli.command('init-db')
-def init_db():
-    """Initialiser la base de données (DROP + CREATE + SEED)."""
-    click.echo('Initialisation de la base de données (DROP + CREATE + SEED)...')
-    init_db_module.main()
-    click.echo('Initialisation terminée.')
 
 
 if __name__ == "__main__":

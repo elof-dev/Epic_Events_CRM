@@ -2,6 +2,7 @@ from app.services.event_service import EventService
 import click
 from datetime import datetime
 from cli.helpers import prompt_select_option
+from app.db.transaction import transactional
 
 
 def main_event_menu(user, session, perm_service):
@@ -62,7 +63,8 @@ def create_event(user, session, perm_service):
             'attendees': int(attendees) if attendees else None,
             'user_support_id': int(support_id_raw) if support_id_raw else None,
         }
-        new_e = event_service.create(user, **fields)
+        with transactional(session):
+            new_e = event_service.create(user, **fields)
         click.echo(f'Evènement créé id={new_e.id}')
     except Exception as e:
         click.echo(f'Erreur création: {e}')
@@ -157,7 +159,8 @@ def update_event(current_user, session, perm_service, event_id):
             click.echo('Annulé')
             return
         try:
-            event_service.update(current_user, event.id, user_support_id=int(new_support))
+            with transactional(session):
+                event_service.update(current_user, event.id, user_support_id=int(new_support))
             click.echo('Support mis à jour')
         except Exception as e:
             click.echo(f'Erreur mise à jour: {e}')
@@ -190,7 +193,8 @@ def update_event(current_user, session, perm_service, event_id):
         else:
             val = new_raw
         try:
-            event_service.update(current_user, event.id, **{field: val})
+            with transactional(session):
+                event_service.update(current_user, event.id, **{field: val})
             click.echo('Champ mis à jour')
             event = session.get(Event, event_id)
         except Exception as e:
@@ -210,7 +214,8 @@ def delete_event(current_user, session, perm_service, event_id):
     try:
         confirm = click.prompt('Confirmer suppression ? (o/n)', default='n')
         if confirm.lower().startswith('o'):
-            event_service.delete(current_user, event.id)
+            with transactional(session):
+                event_service.delete(current_user, event.id)
             click.echo('Evènement supprimé')
     except Exception as e:
         click.echo(f'Erreur suppression: {e}')

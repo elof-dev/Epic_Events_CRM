@@ -1,6 +1,7 @@
 from app.services.contract_service import ContractService
 import click
 from cli.helpers import prompt_select_option
+from app.db.transaction import transactional
 
 
 def get_contracts_menu_options(user, perm_service):
@@ -58,7 +59,8 @@ def create_contract(user, session, perm_service):
             'customer_id': customer_id,
             'user_management_id': manager_id,
         }
-        new_c = contract_service.create(user, **fields)
+        with transactional(session):
+            new_c = contract_service.create(user, **fields)
         click.echo(f'Contrat créé id={new_c.id}')
     except Exception as e:
         click.echo(f'Erreur création: {e}')
@@ -186,7 +188,8 @@ def update_contract(user, session, perm_service, contract_id):
             val = new_val
         updates[field] = val
         try:
-            contract_service.update(user, contract.id, **updates)
+            with transactional(session):
+                contract_service.update(user, contract.id, **updates)
             click.echo('Contrat mis à jour')
             contract = session.get(Contract, contract_id)
         except Exception as e:
@@ -206,7 +209,8 @@ def delete_contract(user, session, perm_service, contract_id):
     try:
         confirm = click.prompt('Confirmer suppression ? (o/n)', default='n')
         if confirm.lower().startswith('o'):
-            contract_service.delete(user, contract.id)
+            with transactional(session):
+                contract_service.delete(user, contract.id)
             click.echo('Contrat supprimé')
     except Exception as e:
         click.echo(f'Erreur: {e}')

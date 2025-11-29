@@ -19,7 +19,7 @@ class UserService:
     def get_by_id(self, user, user_id: int):
         if not self.perm.user_has_permission(user, 'user:read'):
             raise PermissionError('Not allowed to read users')
-        return self.session.get(User, user_id)
+        return self.repo.get_by_id(user_id)
 
     def create(self, current_user, **fields):
         # only management may create users
@@ -39,19 +39,16 @@ class UserService:
                 raise ValueError('Role not found')
             fields['role_id'] = role.id
 
-        # hash password
+        # hash password and delegate to repo
         fields['password_hash'] = self.auth.hash_password(password)
-        u = User(**fields)
-        self.session.add(u)
-        self.session.flush()
-        return u
+        return self.repo.create(**fields)
 
     def update(self, current_user, user_id: int, **fields):
         if not self.perm.user_has_permission(current_user, 'user:update'):
             raise PermissionError('Not allowed to update users')
         if current_user.role.name != 'management':
             raise PermissionError('Only management can update users')
-        u = self.session.get(User, user_id)
+        u = self.repo.get_by_id(user_id)
         if not u:
             raise ValueError('User not found')
         if 'password' in fields:
@@ -61,11 +58,7 @@ class UserService:
             if not role:
                 raise ValueError('Role not found')
             u.role_id = role.id
-        for k, v in fields.items():
-            if hasattr(u, k):
-                setattr(u, k, v)
-        self.session.flush()
-        return u
+        return self.repo.update(u, **fields)
 
     def delete(self, current_user, user_id: int):
         if not self.perm.user_has_permission(current_user, 'user:delete'):
@@ -74,7 +67,7 @@ class UserService:
             raise PermissionError('Only management can delete users')
         if current_user.id == user_id:
             raise ValueError('Cannot delete yourself')
-        u = self.session.get(User, user_id)
+        u = self.repo.get_by_id(user_id)
         if not u:
             raise ValueError('User not found')
         # Conservative behaviour: refuse deletion if the user is referenced
@@ -103,8 +96,7 @@ class UserService:
             )
 
         try:
-            self.session.delete(u)
-            self.session.flush()
+            self.repo.delete(u)
         except Exception:
             # Ensure session is usable after unexpected DB errors
             self.session.rollback()
