@@ -10,7 +10,7 @@ def get_customer_menu_options(user, perm_service):
         options.append(('Afficher tous les clients', 'list_all'))
         if user.role.name == 'sales':
             options.append(('Mes clients', 'mine'))
-    if perm_service.can_create_customer(user):
+    if perm_service.user_has_permission(user, 'customer:create') and user.role.name == 'sales':
         options.append(('Créer un client', 'create'))
     return options
 
@@ -32,7 +32,8 @@ def main_customer_menu(user, session, perm_service):
 
 def create_customer(user, session, perm_service):
     cust_service = CustomerService(session, perm_service)
-    if not perm_service.can_create_customer(user):
+    # creation allowed only for sales role with permission
+    if not perm_service.user_has_permission(user, 'customer:create') or user.role.name != 'sales':
         click.echo("Permission refusée: création de client impossible")
         return
     try:
@@ -48,6 +49,9 @@ def create_customer(user, session, perm_service):
             'company_name': company,
             'phone_number': phone or None,
         }
+        # set owner when created by a sales user
+        if user.role.name == 'sales':
+            fields.setdefault('user_sales_id', user.id)
         with transactional(session):
             new_c = cust_service.create(user, **fields)
         click.echo(f'Client créé id={new_c.id}')
@@ -99,10 +103,20 @@ def display_detail_customers(user, session, perm_service, customer_id):
         return
     click.echo(f"\nID: {customer.id}\nNom: {customer.customer_first_name} {customer.customer_last_name}\nEntreprise: {customer.company_name}\nEmail: {customer.email}\nSales id: {customer.user_sales_id}")
     actions = []
-    if perm_service.can_update_customer(user, customer):
-        actions.append(('Modifier', 'update'))
-    if perm_service.can_delete_customer(user, customer):
-        actions.append(('Supprimer', 'delete'))
+    # Update: require permission and, if sales, ownership
+    if perm_service.user_has_permission(user, 'customer:update'):
+        if user.role.name == 'sales':
+            if customer.user_sales_id == user.id:
+                actions.append(('Modifier', 'update'))
+        else:
+            actions.append(('Modifier', 'update'))
+    # Delete: require permission and, if sales, ownership
+    if perm_service.user_has_permission(user, 'customer:delete'):
+        if user.role.name == 'sales':
+            if customer.user_sales_id == user.id:
+                actions.append(('Supprimer', 'delete'))
+        else:
+            actions.append(('Supprimer', 'delete'))
 
     action = prompt_select_option(actions, prompt='Choix')
     if action is None:

@@ -17,6 +17,7 @@ argon2-cffi = "*"
 pyjwt = "*"
 click = "*"
 cryptography = "*"
+pydantic = {extras = ["email"], version = "^2.12.5"}
 
 [tool.poetry.group.dev.dependencies]
 pytest = "*"

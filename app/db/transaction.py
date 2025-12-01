@@ -3,14 +3,12 @@ from contextlib import contextmanager
 @contextmanager
 def transactional(session):
     """
-    Context manager to commit the given SQLAlchemy session on success,
-    or rollback on exception.
+    Gestionnaire de contexte transactionnel pour une `session` SQLAlchemy.
 
-    Usage:
-        with transactional(session):
-            # perform DB operations using `session`
-            service.create(...)
-    """
+    Cela permet de s'assurer que les opérations effectuées dans le bloc `with`
+    sont engagées (commit) si tout se passe bien, ou annulées (rollback) en cas
+    d'exception.
+        """
     try:
         yield session
         session.commit()

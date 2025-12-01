@@ -1,20 +1,13 @@
 import click
-from app.db.session import create_engine_and_session
+from app.db.session import get_session
 from app.repositories.user_repository import UserRepository
 from app.services.auth_service import AuthService
 from app.services.permission_service import PermissionService
-from app.services.customer_service import CustomerService
-from app.services.contract_service import ContractService
-from app.services.event_service import EventService
 from cli.views.users import main_user_menu
 from cli.views.customers import main_customer_menu
 from cli.views.contracts import main_contract_menu
 from cli.views.events import main_event_menu
 
-
-def get_session():
-    engine, SessionLocal = create_engine_and_session()
-    return SessionLocal()
 
 
 def prompt_login(session):
@@ -45,9 +38,6 @@ def run_interface():
                 continue
 
             perm_service = PermissionService(session)
-            cust_service = CustomerService(session, perm_service)
-            contract_service = ContractService(session, perm_service)
-            event_service = EventService(session, perm_service)
 
             while True:
                 services = perm_service.available_services_for_user(user)

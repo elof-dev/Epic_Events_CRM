@@ -5,6 +5,25 @@ from app.config import JWT_SECRET, JWT_ALGORITHM, JWT_EXP_SECONDS
 
 
 class AuthService:
+    """Service d'authentification minimal.
+
+    Rôle : fournir des utilitaires pour le hachage et la vérification des
+    mots de passe, ainsi que la création et le décodage de tokens JWT.
+
+    Méthodes principales :
+    - `hash_password(password: str) -> str` : retourne une chaîne contenant
+        le mot de passe haché (utilise Argon2).
+    - `verify_password(hashed: str, password: str) -> bool` : vérifie qu'un
+        mot de passe en clair correspond au hachage ; retourne `True`/`False`.
+    - `create_token(user_id: int) -> str` : génère et retourne un token JWT
+        encodant l'`user_id` (champ `sub`) et les claims `iat`/`exp`.
+    - `decode_token(token: str)` : décode et retourne le payload du token JWT.
+
+    Remarques :
+    - Les durées et la clé du JWT sont lues depuis la configuration (`app.config`).
+    - `verify_password` capture les exceptions et renvoie `False` en cas d'erreur.
+    """
+
     def __init__(self):
         self._ph = PasswordHasher()
 

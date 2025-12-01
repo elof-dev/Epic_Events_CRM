@@ -39,30 +39,36 @@ def get_event_menu_options(user, perm_service):
     return options
 def create_event(user, session, perm_service):
     event_service = EventService(session, perm_service)
-    if not perm_service.user_has_permission(user, 'event:create'):
+    # only sales may create events per business rules (enforced in view)
+    if not perm_service.user_has_permission(user, 'event:create') or user.role.name != 'sales':
         click.echo('Permission refusée: création impossible')
         return
     try:
-        contract_id = int(click.prompt('ID du contrat lié'))
+        contract_id = click.prompt('ID du contrat lié')
         event_name = click.prompt('Nom de l\'évènement')
-        event_number = click.prompt('Numéro d\'évènement')
         start_raw = click.prompt('Date/heure de début (YYYY-MM-DD HH:MM)')
         end_raw = click.prompt('Date/heure de fin (YYYY-MM-DD HH:MM)')
-        start_dt = datetime.fromisoformat(start_raw.replace(' ', 'T'))
-        end_dt = datetime.fromisoformat(end_raw.replace(' ', 'T'))
         location = click.prompt('Lieu', default='')
         attendees = click.prompt('Nombre participants', default='0')
         support_id_raw = click.prompt('ID support (optionnel)', default='')
         fields = {
             'contract_id': contract_id,
             'event_name': event_name,
-            'event_number': event_number,
-            'start_datetime': start_dt,
-            'end_datetime': end_dt,
+            'start_datetime': start_raw,
+            'end_datetime': end_raw,
             'location': location or None,
-            'attendees': int(attendees) if attendees else None,
-            'user_support_id': int(support_id_raw) if support_id_raw else None,
+            'attendees': attendees or None,
+            'user_support_id': support_id_raw or None,
         }
+        # enforce business rule at view level: contract must be signed and belong to this sales user
+        from app.models.contract import Contract
+        contract = session.get(Contract, contract_id)
+        if not contract:
+            click.echo('Contrat introuvable ou non accessible')
+            return
+        if not contract.signed or contract.customer.user_sales_id != user.id:
+            click.echo("Impossible de créer l'évènement: le contrat doit être signé et appartenir au commercial")
+            return
         with transactional(session):
             new_e = event_service.create(user, **fields)
         click.echo(f'Evènement créé id={new_e.id}')
@@ -87,7 +93,16 @@ def list_all_events(user, session, perm_service):
 def my_events(user, session, perm_service):
     event_service = EventService(session, perm_service)
     try:
-        events = event_service.list_mine(user)
+        # role/ownership logic handled in the view
+        if user.role.name == 'support':
+            events = event_service.list_by_support_user(user.id)
+        elif user.role.name == 'sales':
+            customer_ids = [c.id for c in user.customers]
+            events = []
+            for cid in customer_ids:
+                events.extend(event_service.list_by_customer(cid))
+        else:
+            events = []
         display_list_events(events)
         opts = [(f"{e.id}: {e.event_name}", e.id) for e in events]
         choice = prompt_select_option(opts, prompt='Choisir évènement')
@@ -125,7 +140,7 @@ def display_detail_events(current_user, session, perm_service, event_id):
     if not event:
         click.echo('Evènement introuvable')
         return
-    click.echo(f"\nID: {event.id}\nNom: {event.event_name}\nNuméro: {event.event_number}\nContract: {event.contract_id}\nClient: {event.customer_id}\nDébut: {event.start_datetime}\nFin: {event.end_datetime}\nLieu: {event.location}\nParticipants: {event.attendees}\nSupport: {event.user_support_id}")
+    click.echo(f"\nID: {event.id}\nNom: {event.event_name}\nNuméro: {event.event_id}\nContract: {event.contract_id}\nClient: {event.customer_id}\nDébut: {event.start_datetime}\nFin: {event.end_datetime}\nLieu: {event.location}\nParticipants: {event.attendees}\nSupport: {event.user_support_id}")
     can_update = perm_service.user_has_permission(current_user, 'event:update')
     can_delete = perm_service.user_has_permission(current_user, 'event:delete')
     actions = []
@@ -152,7 +167,7 @@ def update_event(current_user, session, perm_service, event_id):
     if not perm_service.user_has_permission(current_user, 'event:update'):
         click.echo('Permission refusée: mise à jour impossible')
         return
-    # management can only update support assignment
+    # management can only update support assignment (enforced at view level)
     if current_user.role.name == 'management':
         new_support = click.prompt('ID nouveau support (laisser vide pour annuler)', default='')
         if not new_support:
@@ -168,7 +183,7 @@ def update_event(current_user, session, perm_service, event_id):
 
     mod_fields = [
         ('Nom', 'event_name'),
-        ('Numéro', 'event_number'),
+        ('Numéro', 'event_id'),
         ('Début (YYYY-MM-DD HH:MM)', 'start_datetime'),
         ('Fin (YYYY-MM-DD HH:MM)', 'end_datetime'),
         ('Lieu', 'location'),
@@ -185,11 +200,11 @@ def update_event(current_user, session, perm_service, event_id):
         current_val = getattr(event, field)
         new_raw = click.prompt(label, default=str(current_val) if current_val is not None else '')
         if field in ('start_datetime', 'end_datetime') and new_raw:
-            val = datetime.fromisoformat(new_raw.replace(' ', 'T'))
+            val = new_raw
         elif field == 'attendees':
-            val = int(new_raw) if new_raw else None
+            val = new_raw or None
         elif field == 'user_support_id':
-            val = int(new_raw) if new_raw else None
+            val = new_raw or None
         else:
             val = new_raw
         try:
@@ -222,4 +237,4 @@ def delete_event(current_user, session, perm_service, event_id):
 
 
 def print_event(e):
-    click.echo(f"{e.id}: {e.event_name} - {e.event_number} client={e.customer_id} support={e.user_support_id}")
+    click.echo(f"{e.id}: {e.event_name} - {e.event_id} client={e.customer_id} support={e.user_support_id}")

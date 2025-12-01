@@ -2,74 +2,134 @@ from app.repositories.user_repository import UserRepository
 from app.models.user import User
 from app.models.role import Role
 from app.services.auth_service import AuthService
+from pydantic import ValidationError
+from app.schemas.user import UserCreate, UserUpdate
+from sqlalchemy.exc import IntegrityError
+from typing import Optional
 
 
 class UserService:
+    """Service de gestion des utilisateurs.
+
+    Rôle : centraliser la logique applicative liée aux utilisateurs en
+    s'appuyant sur `UserRepository` pour les opérations de persistance et
+    sur `permission_service` pour vérifier les permissions générales.
+
+    Ce que la classe renvoie / fournit :
+    - `list_all(user)` : retourne une liste d'objets `User` (tous les utilisateurs accessibles).
+    - `get_by_id(user, user_id)` : retourne un objet `User` par son identifiant.
+    - `create(current_user, **fields)` : crée un nouvel utilisateur et retourne
+        l'objet `User` créé (attend `password` et `role_id`).
+    - `update(current_user, user_id, **fields)` : met à jour et retourne l'objet `User` mis à jour.
+    - `delete(current_user, user_id)` : supprime l'utilisateur (ne retourne rien) ;
+        l'opération vérifie d'abord que l'utilisateur n'est référencé par aucun contrat/événement/client.
+
+    Remarques :
+    - Les méthodes utilisent `permission_service.user_has_permission` pour
+        valider les droits CRUD. Les vérifications fines d'appartenance doivent
+        être effectuées par la couche de présentation si nécessaire.
+    - `create` hache le mot de passe via `AuthService` avant de déléguer au dépôt.
+    """
+
     def __init__(self, session, permission_service):
         self.session = session
         self.repo = UserRepository(session)
         self.perm = permission_service
         self.auth = AuthService()
 
-    def list_all(self, user):
-        if not self.perm.user_has_permission(user, 'user:read'):
-            raise PermissionError('Not allowed to list users')
-        return self.repo.list_all()
-
-    def get_by_id(self, user, user_id: int):
-        if not self.perm.user_has_permission(user, 'user:read'):
-            raise PermissionError('Not allowed to read users')
-        return self.repo.get_by_id(user_id)
-
     def create(self, current_user, **fields):
-        # only management may create users
+        # check permissions
         if not self.perm.user_has_permission(current_user, 'user:create'):
-            raise PermissionError('Not allowed to create users')
-        if current_user.role.name != 'management':
-            raise PermissionError('Only management can create users')
-        # require username, password, role_id or role_name
-        password = fields.pop('password', None)
-        if not password:
-            raise ValueError('Password is required')
-        role_id = fields.get('role_id')
-        role_name = fields.pop('role_name', None)
-        if role_name and not role_id:
-            role = self.session.query(Role).filter(Role.name == role_name).one_or_none()
-            if not role:
-                raise ValueError('Role not found')
-            fields['role_id'] = role.id
+            raise PermissionError('Permission refuseée')
+        # validate incoming data via Pydantic (ensures required fields and basic types)
+        try:
+            validated = UserCreate(**fields).model_dump()
+        except ValidationError as exc:
+            errors = exc.errors()
+            messages = "; ".join(f"{'.'.join(map(str, e.get('loc', [])))}: {e.get('msg')}" for e in errors)
+            raise ValueError(f"Données invalides: {messages}") from exc
+        # normalize, validate role and uniqueness, hash password
+        validated = self._normalize(validated)
+        self._ensure_role_exists(validated.get('role_id'))
+        self._check_uniqueness(validated)
+        self._hash_password_if_present(validated)
 
-        # hash password and delegate to repo
-        fields['password_hash'] = self.auth.hash_password(password)
-        return self.repo.create(**fields)
+        try:
+            return self.repo.create(**validated)
+        except IntegrityError as exc:
+            # race condition or DB-level duplicate; rollback and expose friendly message
+            self.session.rollback()
+            raise ValueError('Violation de contrainte en base (doublon possible)') from exc
 
     def update(self, current_user, user_id: int, **fields):
         if not self.perm.user_has_permission(current_user, 'user:update'):
-            raise PermissionError('Not allowed to update users')
-        if current_user.role.name != 'management':
-            raise PermissionError('Only management can update users')
+            raise PermissionError('Permission refusée')
         u = self.repo.get_by_id(user_id)
         if not u:
-            raise ValueError('User not found')
-        if 'password' in fields:
-            u.password_hash = self.auth.hash_password(fields.pop('password'))
-        if 'role_name' in fields:
-            role = self.session.query(Role).filter(Role.name == fields.pop('role_name')).one_or_none()
-            if not role:
-                raise ValueError('Role not found')
-            u.role_id = role.id
-        return self.repo.update(u, **fields)
+            raise ValueError('Utilisateur introuvable')
+        # validate provided fields via Pydantic (coercion + basic checks)
+        try:
+            validated = UserUpdate(**fields).model_dump(exclude_none=True)
+        except ValidationError as exc:
+            errors = exc.errors()
+            messages = "; ".join(f"{'.'.join(map(str, e.get('loc', [])))}: {e.get('msg')}" for e in errors)
+            raise ValueError(f"Données invalides: {messages}") from exc
+        # normalize, validate role (if provided), uniqueness and hash password
+        validated = self._normalize(validated)
+        if 'role_id' in validated:
+            self._ensure_role_exists(validated.get('role_id'))
+        self._check_uniqueness(validated, exclude_user_id=u.id)
+        self._hash_password_if_present(validated)
+
+        try:
+            return self.repo.update(u, **validated)
+        except IntegrityError as exc:
+            self.session.rollback()
+            raise ValueError('Violation de contrainte en base (doublon possible)') from exc
+
+    # ----- helpers -----
+    def _normalize(self, validated: dict) -> dict:
+        # trim strings and normalize email/username
+        for k in ('username', 'email', 'phone_number'):
+            if k in validated and isinstance(validated[k], str):
+                validated[k] = validated[k].strip()
+        if 'email' in validated and isinstance(validated.get('email'), str):
+            validated['email'] = validated['email'].lower()
+        return validated
+
+    def _ensure_role_exists(self, role_id: Optional[int]) -> None:
+        if not role_id:
+            raise ValueError('role_id est requis')
+        role = self.session.query(Role).filter(Role.id == role_id).one_or_none()
+        if not role:
+            raise ValueError('Role introuvable')
+
+    def _check_uniqueness(self, validated: dict, exclude_user_id: Optional[int] = None) -> None:
+        from app.models.user import User as UserModel
+        if 'username' in validated:
+            other = self.repo.get_by_username(validated['username'])
+            if other and (exclude_user_id is None or other.id != exclude_user_id):
+                raise ValueError('Nom d\'utilisateur déjà utilisé')
+        if 'email' in validated and validated.get('email'):
+            other = self.session.query(UserModel).filter(UserModel.email == validated.get('email')).one_or_none()
+            if other and (exclude_user_id is None or other.id != exclude_user_id):
+                raise ValueError('Email déjà utilisé')
+        if 'phone_number' in validated and validated.get('phone_number'):
+            other = self.session.query(UserModel).filter(UserModel.phone_number == validated.get('phone_number')).one_or_none()
+            if other and (exclude_user_id is None or other.id != exclude_user_id):
+                raise ValueError('Numéro de téléphone déjà utilisé')
+    def _hash_password_if_present(self, validated: dict) -> None:
+        if 'password' in validated:
+            validated['password_hash'] = self.auth.hash_password(validated.pop('password'))
 
     def delete(self, current_user, user_id: int):
         if not self.perm.user_has_permission(current_user, 'user:delete'):
-            raise PermissionError('Not allowed to delete users')
-        if current_user.role.name != 'management':
-            raise PermissionError('Only management can delete users')
+            raise PermissionError('Permission refusée')
         if current_user.id == user_id:
-            raise ValueError('Cannot delete yourself')
+            raise ValueError('Vous ne pouvez pas supprimer votre propre compte')
         u = self.repo.get_by_id(user_id)
         if not u:
-            raise ValueError('User not found')
+            raise ValueError('Utilisateur introuvable')
         # Conservative behaviour: refuse deletion if the user is referenced
         # by contracts, events or customers. Provide a clear error message
         # instead of letting the DB raise IntegrityError and put the
@@ -101,3 +161,15 @@ class UserService:
             # Ensure session is usable after unexpected DB errors
             self.session.rollback()
             raise
+
+
+    def list_all(self, user):
+        if not self.perm.user_has_permission(user, 'user:read'):
+            raise PermissionError('Permission refusée')
+        return self.repo.list_all()
+
+    def get_by_id(self, user, user_id: int):
+        if not self.perm.user_has_permission(user, 'user:read'):
+            raise PermissionError('Permission refusée')
+        return self.repo.get_by_id(user_id)
+

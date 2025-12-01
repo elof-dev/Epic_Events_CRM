@@ -3,90 +3,76 @@ from app.models.permission import Permission
 
 
 class PermissionService:
+    """Service de gestion des permissions.
+
+    Rôle : centraliser les vérifications de permissions basées sur le rôle
+    d'un utilisateur. Les permissions sont lues via `user.role.permissions`.
+
+    Ce que la classe renvoie / fournit :
+    - `user_has_permission(user, permission_name) -> bool` : indique si l'utilisateur
+        possède la permission passée en paramètre (vérification via son rôle).
+    - `available_services_for_user(user) -> List[str]` : liste des sections
+        applicatives accessibles par l'utilisateur (ex. `manage_users`).
+    - Méthodes utilitaires nommées `can_create_*`, `can_update_*`, `can_delete_*`
+        qui retournent un booléen indiquant si l'utilisateur a la permission CRUD
+        correspondante. 
+    """
+
     def __init__(self, session):
         self.session = session
 
     def user_has_permission(self, user, permission_name: str) -> bool:
-        # load permissions via role
+        """
+        Vérifie si l'utilisateur possède la permission spécifiée.
+        Par exemple, "customer:create", "contract:read", etc.
+        Retourne True si l'utilisateur a la permission, False sinon.
+        """
         for p in user.role.permissions:
             if p.name == permission_name:
                 return True
         return False
 
     def available_services_for_user(self, user) -> List[str]:
+        """
+        Retourne la liste des sections applicatives accessibles par l'utilisateur.
+        Utilisé pour afficher dynamiquement les options dans l'interface CLI.
+        """
         services = []
-        # map high level services to permission checks
         if self.user_has_permission(user, "user:read"):
             services.append("manage_users")
-        if self.user_has_permission(user, "customer:read") or self.user_has_permission(user, "customer:create"):
+        if self.user_has_permission(user, "customer:read"):
             services.append("manage_customers")
-        if self.user_has_permission(user, "contract:read") or self.user_has_permission(user, "contract:create"):
+        if self.user_has_permission(user, "contract:read"):
             services.append("manage_contracts")
-        if self.user_has_permission(user, "event:read") or self.user_has_permission(user, "event:create"):
+        if self.user_has_permission(user, "event:read"):
             services.append("manage_events")
         return services
 
-    # Business-level permission checks
+    
     def can_create_customer(self, user) -> bool:
-        return user.role.name == "sales" and self.user_has_permission(user, "customer:create")
+        return self.user_has_permission(user, "customer:create")
 
     def can_update_customer(self, user, customer) -> bool:
-        if not self.user_has_permission(user, "customer:update"):
-            return False
-        if user.role.name == "sales":
-            return customer.user_sales_id == user.id
-        # management and support do not update customers per rules
-        return False
+        return self.user_has_permission(user, "customer:update")
 
     def can_delete_customer(self, user, customer) -> bool:
-        if not self.user_has_permission(user, "customer:delete"):
-            return False
-        if user.role.name == "sales":
-            return customer.user_sales_id == user.id
-        return False
+        return self.user_has_permission(user, "customer:delete")
 
     def can_create_contract(self, user) -> bool:
-        return user.role.name == "management" and self.user_has_permission(user, "contract:create")
+        return self.user_has_permission(user, "contract:create")
 
     def can_update_contract(self, user, contract) -> bool:
-        if not self.user_has_permission(user, "contract:update"):
-            return False
-        if user.role.name == "management":
-            return True
-        if user.role.name == "sales":
-            # sales can update contracts linked to their customers
-            return contract.customer.user_sales_id == user.id
-        return False
+        return self.user_has_permission(user, "contract:update")
 
     def can_delete_contract(self, user) -> bool:
-        if not self.user_has_permission(user, "contract:delete"):
-            return False
-        return user.role.name == "management"
+        return self.user_has_permission(user, "contract:delete")
 
     def can_create_event(self, user, contract) -> bool:
-        # sales may create events for their clients only and only when the contract is signed
-        if not self.user_has_permission(user, "event:create"):
-            return False
-        if user.role.name != "sales":
-            return False
-        return contract.signed and contract.customer.user_sales_id == user.id
+        return self.user_has_permission(user, "event:create")
 
     def can_update_event(self, user, event, fields_to_update: list) -> bool:
-        if not self.user_has_permission(user, "event:update"):
-            return False
-        if user.role.name == "management":
-            # management can only update support assignment
-            allowed = {"user_support_id"}
-            return set(fields_to_update).issubset(allowed)
-        if user.role.name == "support":
-            # support can update events they are assigned to
-            return event.user_support_id == user.id
-        return False
+        return self.user_has_permission(user, "event:update")
 
     def can_read_event(self, user, event) -> bool:
         # everyone with event:read can read; sales can read their clients' events
-        if not self.user_has_permission(user, "event:read"):
-            return False
-        if user.role.name == "sales":
-            return event.customer.user_sales_id == user.id
-        return True
+        return self.user_has_permission(user, "event:read")

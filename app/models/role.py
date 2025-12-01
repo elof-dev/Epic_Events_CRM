@@ -1,7 +1,10 @@
 from sqlalchemy import Column, String, Table, ForeignKey, Integer
 from sqlalchemy.orm import relationship
-from .base import Base
+from .base import Base, TimestampMixin
 
+
+# Association table pour la relation many-to-many entre Role et Permission
+# Cette table n'a pas de modèle dédié car elle ne contient que des clés étrangères
 role_permission = Table(
     "role_permission",
     Base.metadata,
@@ -10,10 +13,12 @@ role_permission = Table(
 )
 
 
-class Role(Base):
+class Role(TimestampMixin, Base):
+    """
+    Modèle représentant un rôle attribué aux utilisateurs, avec des permissions associées.
+    """
     __tablename__ = "roles"
 
-    id = Column(Integer, primary_key=True, autoincrement=True)
     name = Column(String(50), unique=True, nullable=False)
 
     permissions = relationship("Permission", secondary=role_permission, back_populates="roles")

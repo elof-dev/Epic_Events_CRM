@@ -4,15 +4,22 @@ from .base import Base, TimestampMixin
 
 
 class User(TimestampMixin, Base):
+    """
+    Modèle représentant un utilisateur avec un rôle spécifique.
+    Il est associé :
+        - à des clients en tant que sales,
+        - à des contrats en tant que management,
+        - à des événements en tant que support.
+    """
     __tablename__ = "users"
 
     role_id = Column(Integer, ForeignKey("roles.id"), nullable=False)
     user_first_name = Column(String(100), nullable=False)
     user_last_name = Column(String(100), nullable=False)
-    email = Column(String(255), unique=True, nullable=False)
-    phone_number = Column(String(50), unique=True, nullable=True)
+    email = Column(String(100), unique=True, nullable=False)
+    phone_number = Column(String(20), unique=True, nullable=False)
     username = Column(String(100), unique=True, nullable=False)
-    password_hash = Column(String(255), nullable=False)
+    password_hash = Column(String(100), nullable=False)
 
     role = relationship("Role", back_populates="users")
     customers = relationship("Customer", back_populates="sales_user", foreign_keys="Customer.user_sales_id")

@@ -44,15 +44,13 @@ def create_contract(user, session, perm_service):
         click.echo('Permission refusée: création de contrat impossible')
         return
     try:
-        contract_number = click.prompt('Numéro de contrat')
-        total_amount = float(click.prompt('Montant total', default='0'))
+        total_amount = click.prompt('Montant total')
         signed_input = click.prompt('Signé ? (o/n)', default='n')
         signed = signed_input.lower().startswith('o')
-        balance_due = float(click.prompt('Balance due', default=str(total_amount)))
-        customer_id = int(click.prompt('ID client associé'))
-        manager_id = int(click.prompt('ID manager (management user)'))
+        balance_due = click.prompt('Balance due', default=str(total_amount))
+        customer_id = click.prompt('ID client associé')
+        manager_id = click.prompt('ID manager (management user)')
         fields = {
-            'contract_number': contract_number,
             'total_amount': total_amount,
             'signed': signed,
             'balance_due': balance_due,
@@ -82,7 +80,14 @@ def list_all_contracts(user, session, perm_service):
 def my_contracts(user, session, perm_service):
     contract_service = ContractService(session, perm_service)
     try:
-        contracts = contract_service.list_mine(user)
+        # role/ownership logic handled in the view
+        if user.role.name == 'management':
+            contracts = contract_service.list_by_management_user(user.id)
+        elif user.role.name == 'sales':
+            customer_ids = [c.id for c in user.customers]
+            contracts = contract_service.list_by_customer_ids(customer_ids)
+        else:
+            contracts = []
         display_list_contracts(contracts)
         sel = click.prompt('\nChoisissez un id de contrat (0=Retour)', type=int)
         if sel == 0:
@@ -95,7 +100,14 @@ def my_contracts(user, session, perm_service):
 def my_unsigned_contracts(user, session, perm_service):
     contract_service = ContractService(session, perm_service)
     try:
-        contracts = [c for c in contract_service.list_mine(user) if not c.signed]
+        # filter contracts according to role/ownership in view
+        if user.role.name == 'management':
+            contracts = [c for c in contract_service.list_by_management_user(user.id) if not c.signed]
+        elif user.role.name == 'sales':
+            customer_ids = [c.id for c in user.customers]
+            contracts = [c for c in contract_service.list_by_customer_ids(customer_ids) if not c.signed]
+        else:
+            contracts = []
         display_list_contracts(contracts)
         sel = click.prompt('\nChoisissez un id de contrat (0=Retour)', type=int)
         if sel == 0:
@@ -108,7 +120,13 @@ def my_unsigned_contracts(user, session, perm_service):
 def my_unpaid_contracts(user, session, perm_service):
     contract_service = ContractService(session, perm_service)
     try:
-        contracts = [c for c in contract_service.list_mine(user) if c.balance_due > 0]
+        if user.role.name == 'management':
+            contracts = [c for c in contract_service.list_by_management_user(user.id) if c.balance_due > 0]
+        elif user.role.name == 'sales':
+            customer_ids = [c.id for c in user.customers]
+            contracts = [c for c in contract_service.list_by_customer_ids(customer_ids) if c.balance_due > 0]
+        else:
+            contracts = []
         display_list_contracts(contracts)
         sel = click.prompt('\nChoisissez un id de contrat (0=Retour)', type=int)
         if sel == 0:
@@ -130,7 +148,7 @@ def display_detail_contracts(user, session, perm_service, contract_id):
     if not contract:
         click.echo('Contrat introuvable')
         return
-    click.echo(f"\nID: {contract.id}\nNuméro: {contract.contract_number}\nTotal: {contract.total_amount}\nBalance: {contract.balance_due}\nSigné: {contract.signed}\nClient: {contract.customer_id}\nManager: {contract.user_management_id}")
+    click.echo(f"\nID: {contract.id}\nNuméro: {contract.contract_id}\nTotal: {contract.total_amount}\nBalance: {contract.balance_due}\nSigné: {contract.signed}\nClient: {contract.customer_id}\nManager: {contract.user_management_id}")
     # available actions
     can_update = perm_service.user_has_permission(user, 'contract:update') and perm_service.can_update_contract(user, contract)
     can_delete = perm_service.user_has_permission(user, 'contract:delete') and perm_service.can_delete_contract(user)
@@ -160,7 +178,7 @@ def update_contract(user, session, perm_service, contract_id):
         click.echo('Permission refusée: mise à jour impossible')
         return
     mod_fields = [
-        ('Numéro', 'contract_number'),
+        ('Numéro', 'contract_id'),
         ('Montant total', 'total_amount'),
         ('Balance due', 'balance_due'),
         ('Signé (o/n)', 'signed'),
@@ -180,10 +198,6 @@ def update_contract(user, session, perm_service, contract_id):
         new_val = click.prompt(label, default=str(current_val) if current_val is not None else '')
         if field == 'signed':
             val = new_val.lower().startswith('o')
-        elif field in ('total_amount', 'balance_due'):
-            val = float(new_val)
-        elif field in ('customer_id', 'user_management_id'):
-            val = int(new_val)
         else:
             val = new_val
         updates[field] = val
@@ -217,5 +231,5 @@ def delete_contract(user, session, perm_service, contract_id):
 
 
 def print_contract(c):
-    click.echo(f"{c.id}: {c.contract_number} - total={c.total_amount} balance={c.balance_due} signed={c.signed} customer_id={c.customer_id} manager_id={c.user_management_id}")
+    click.echo(f"{c.id}: {c.contract_id} - total={c.total_amount} balance={c.balance_due} signed={c.signed} customer_id={c.customer_id} manager_id={c.user_management_id}")
 

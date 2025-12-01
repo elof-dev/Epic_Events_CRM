@@ -4,13 +4,15 @@ from .base import Base, TimestampMixin
 
 
 class Event(TimestampMixin, Base):
+    """
+    Modèle représentant un événement lié à un contrat, un client, et géré par un utilisateur de support.
+    """
     __tablename__ = "events"
 
     contract_id = Column(Integer, ForeignKey("contracts.id"), nullable=False)
     customer_id = Column(Integer, ForeignKey("customers.id"), nullable=False)
     user_support_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     event_name = Column(String(255), nullable=False)
-    event_number = Column(String(100), unique=True, nullable=False)
     start_datetime = Column(DateTime, nullable=False)
     end_datetime = Column(DateTime, nullable=False)
     location = Column(String(255), nullable=True)
@@ -22,4 +24,4 @@ class Event(TimestampMixin, Base):
     support_user = relationship("User", back_populates="support_events")
 
     def __repr__(self):
-        return f"<Event {self.event_number} {self.event_name}>"
+        return f"<Event {self.event_id} {self.event_name}>"
