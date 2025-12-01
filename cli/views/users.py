@@ -1,6 +1,6 @@
 from app.services.user_service import UserService
 import click
-from cli.helpers import prompt_select_option
+from cli.helpers import prompt_select_option, prompt_list_or_empty, prompt_detail_actions
 from app.db.transaction import transactional
 
 
@@ -156,12 +156,11 @@ def list_all_users(user, session, perm_service):
     user_service = UserService(session, perm_service)
     try:
         users = user_service.list_all(user)
-        click.echo('\nListe des utilisateurs:')
         user_options = [(
             f"{u.id}: {u.user_first_name} {u.user_last_name} ({u.username})",
             u.id,
         ) for u in users]
-        choice = prompt_select_option(user_options, prompt='Choisir utilisateur')
+        choice = prompt_list_or_empty(user_options, empty_message='Aucun utilisateur', prompt_text='Choisir utilisateur')
         if choice is None:
             return
         display_detail_users(user, session, perm_service, choice)
@@ -197,7 +196,7 @@ def display_detail_users(current_user, session, perm_service, target_user_id):
         actions.append(('Modifier', 'update'))
     if perm_service.user_has_permission(current_user, 'user:delete') and current_user.role.name == 'management':
         actions.append(('Supprimer', 'delete'))
-    action = prompt_select_option(actions, prompt='Choix')
+    action = prompt_detail_actions(actions, prompt_text='Choix')
     if action is None:
         return
     if action == 'update':

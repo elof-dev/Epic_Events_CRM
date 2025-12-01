@@ -12,9 +12,9 @@ class Customer(TimestampMixin, Base):
     user_sales_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     customer_first_name = Column(String(100), nullable=False)
     customer_last_name = Column(String(100), nullable=False)
-    email = Column(String(255), unique=True, nullable=False)
-    phone_number = Column(String(50), unique=True, nullable=False)
-    company_name = Column(String(255), unique=True, nullable=False)
+    email = Column(String(100), unique=True, nullable=False)
+    phone_number = Column(String(20), unique=True, nullable=False)
+    company_name = Column(String(100), unique=True, nullable=False)
 
     sales_user = relationship("User", back_populates="customers")
     contracts = relationship("Contract", back_populates="customer")

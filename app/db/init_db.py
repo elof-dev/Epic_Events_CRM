@@ -126,8 +126,8 @@ def seed(session):
     # sales1: no client
 
     # sales2: 2 clients
-    customer_a = Customer(user_sales_id=sales2.id, customer_first_name="Client_A", customer_last_name="Alpha", email="clienta@example.com", phone_number="+33900000001", company_name="Company A")
-    customer_b = Customer(user_sales_id=sales2.id, customer_first_name="Client_B", customer_last_name="Beta", email="clientb@example.com", phone_number="+33900000002", company_name="Company B")
+    customer_a = Customer(user_sales_id=sales2.id, customer_first_name="Client", customer_last_name="A", email="clienta@example.com", phone_number="+33900000001", company_name="Company A")
+    customer_b = Customer(user_sales_id=sales2.id, customer_first_name="Client", customer_last_name="B", email="clientb@example.com", phone_number="+33900000002", company_name="Company B")
     session.add_all([customer_a, customer_b])
     session.flush()
 
@@ -148,7 +148,7 @@ def seed(session):
     session.add_all([event_1, event_2])
 
     # sales3: 1 client with 2 contracts created by manager2
-    customer_c = Customer(user_sales_id=sales3.id, customer_first_name="Client_C", customer_last_name="Gamma", email="clientc@example.com", phone_number="+33900000003", company_name="Company C")
+    customer_c = Customer(user_sales_id=sales3.id, customer_first_name="Client", customer_last_name="C", email="clientc@example.com", phone_number="+33900000003", company_name="Company C")
     session.add(customer_c)
     session.flush()
 

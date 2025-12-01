@@ -1,7 +1,7 @@
 from app.services.event_service import EventService
 import click
 from datetime import datetime
-from cli.helpers import prompt_select_option
+from cli.helpers import prompt_select_option, prompt_list_or_empty, prompt_detail_actions
 from app.db.transaction import transactional
 
 
@@ -80,9 +80,8 @@ def list_all_events(user, session, perm_service):
     event_service = EventService(session, perm_service)
     try:
         events = event_service.list_all(user)
-        display_list_events(events)
         opts = [(f"{e.id}: {e.event_name}", e.id) for e in events]
-        choice = prompt_select_option(opts, prompt='Choisir évènement')
+        choice = prompt_list_or_empty(opts, empty_message='Aucun évènement', prompt_text='Choisir évènement')
         if choice is None:
             return
         display_detail_events(user, session, perm_service, choice)
@@ -103,9 +102,18 @@ def my_events(user, session, perm_service):
                 events.extend(event_service.list_by_customer(cid))
         else:
             events = []
-        display_list_events(events)
+        if not events:
+            click.echo('\nAucun évènement')
+            try:
+                while True:
+                    c = click.prompt('Choix (0=Retour)', type=int)
+                    if c == 0:
+                        break
+            except Exception:
+                pass
+            return
         opts = [(f"{e.id}: {e.event_name}", e.id) for e in events]
-        choice = prompt_select_option(opts, prompt='Choisir évènement')
+        choice = prompt_list_or_empty(opts, empty_message='Aucun évènement', prompt_text='Choisir évènement')
         if choice is None:
             return
         display_detail_events(user, session, perm_service, choice)
@@ -117,9 +125,18 @@ def events_without_support(user, session, perm_service):
     event_service = EventService(session, perm_service)
     try:
         events = [e for e in event_service.list_all(user) if e.user_support_id is None]
-        display_list_events(events)
+        if not events:
+            click.echo('\nAucun évènement')
+            try:
+                while True:
+                    c = click.prompt('Choix (0=Retour)', type=int)
+                    if c == 0:
+                        break
+            except Exception:
+                pass
+            return
         opts = [(f"{e.id}: {e.event_name}", e.id) for e in events]
-        choice = prompt_select_option(opts, prompt='Choisir évènement')
+        choice = prompt_list_or_empty(opts, empty_message='Aucun évènement', prompt_text='Choisir évènement')
         if choice is None:
             return
         display_detail_events(user, session, perm_service, choice)
@@ -148,7 +165,7 @@ def display_detail_events(current_user, session, perm_service, event_id):
         actions.append(('Modifier', 'update'))
     if can_delete:
         actions.append(('Supprimer', 'delete'))
-    action = prompt_select_option(actions, prompt='Choix')
+    action = prompt_detail_actions(actions, prompt_text='Choix')
     if action is None:
         return
     if action == 'update':

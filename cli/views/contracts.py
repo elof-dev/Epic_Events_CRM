@@ -1,6 +1,6 @@
 from app.services.contract_service import ContractService
 import click
-from cli.helpers import prompt_select_option
+from cli.helpers import prompt_select_option, prompt_list_or_empty, prompt_detail_actions
 from app.db.transaction import transactional
 
 
@@ -68,9 +68,9 @@ def list_all_contracts(user, session, perm_service):
     contract_service = ContractService(session, perm_service)
     try:
         contracts = contract_service.list_all(user)
-        display_list_contracts(contracts)
-        sel = click.prompt('\nChoisissez un id de contrat (0=Retour)', type=int)
-        if sel == 0:
+        opts = [(f"{c.id}: {c.contract_id}", c.id) for c in contracts]
+        sel = prompt_list_or_empty(opts, empty_message='Aucun contrat', prompt_text='Choisissez un id de contrat')
+        if sel is None:
             return
         display_detail_contracts(user, session, perm_service, sel)
     except Exception as e:
@@ -88,9 +88,19 @@ def my_contracts(user, session, perm_service):
             contracts = contract_service.list_by_customer_ids(customer_ids)
         else:
             contracts = []
-        display_list_contracts(contracts)
-        sel = click.prompt('\nChoisissez un id de contrat (0=Retour)', type=int)
-        if sel == 0:
+        if not contracts:
+            click.echo('\nAucun contrat')
+            try:
+                while True:
+                    c = click.prompt('Choix (0=Retour)', type=int)
+                    if c == 0:
+                        break
+            except Exception:
+                pass
+            return
+        opts = [(f"{c.id}: {c.contract_id}", c.id) for c in contracts]
+        sel = prompt_list_or_empty(opts, empty_message='Aucun contrat', prompt_text='Choisissez un id de contrat')
+        if sel is None:
             return
         display_detail_contracts(user, session, perm_service, sel)
     except Exception as e:
@@ -108,9 +118,19 @@ def my_unsigned_contracts(user, session, perm_service):
             contracts = [c for c in contract_service.list_by_customer_ids(customer_ids) if not c.signed]
         else:
             contracts = []
-        display_list_contracts(contracts)
-        sel = click.prompt('\nChoisissez un id de contrat (0=Retour)', type=int)
-        if sel == 0:
+        if not contracts:
+            click.echo('\nAucun contrat')
+            try:
+                while True:
+                    c = click.prompt('Choix (0=Retour)', type=int)
+                    if c == 0:
+                        break
+            except Exception:
+                pass
+            return
+        opts = [(f"{c.id}: {c.contract_id}", c.id) for c in contracts]
+        sel = prompt_list_or_empty(opts, empty_message='Aucun contrat', prompt_text='Choisissez un id de contrat')
+        if sel is None:
             return
         display_detail_contracts(user, session, perm_service, sel)
     except Exception as e:
@@ -127,9 +147,19 @@ def my_unpaid_contracts(user, session, perm_service):
             contracts = [c for c in contract_service.list_by_customer_ids(customer_ids) if c.balance_due > 0]
         else:
             contracts = []
-        display_list_contracts(contracts)
-        sel = click.prompt('\nChoisissez un id de contrat (0=Retour)', type=int)
-        if sel == 0:
+        if not contracts:
+            click.echo('\nAucun contrat')
+            try:
+                while True:
+                    c = click.prompt('Choix (0=Retour)', type=int)
+                    if c == 0:
+                        break
+            except Exception:
+                pass
+            return
+        opts = [(f"{c.id}: {c.contract_id}", c.id) for c in contracts]
+        sel = prompt_list_or_empty(opts, empty_message='Aucun contrat', prompt_text='Choisissez un id de contrat')
+        if sel is None:
             return
         display_detail_contracts(user, session, perm_service, sel)
     except Exception as e:
@@ -158,9 +188,17 @@ def display_detail_contracts(user, session, perm_service, contract_id):
     if can_delete:
         actions.append(('Supprimer', 'delete'))
 
-    action = prompt_select_option(actions, prompt='Choix')
-    if action is None:
-        return
+    if not actions:
+        try:
+            choice = click.prompt('Choix (0=Retour)', type=int)
+            if choice == 0:
+                return
+        except Exception:
+            return
+    else:
+        action = prompt_detail_actions(actions, prompt_text='Choix')
+        if action is None:
+            return
     if action == 'update':
         update_contract(user, session, perm_service, contract_id)
     elif action == 'delete':
