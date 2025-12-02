@@ -34,14 +34,14 @@ class CustomerService:
 
     def create(self, user, **fields):
         if not self.perm.can_create_customer(user):
-            raise PermissionError("User not allowed to create customers")
+            raise PermissionError("Permission refuseée")
         # creation logic: service does not enforce ownership here; views handle ownership assignment
         try:
             validated = CustomerCreate(**fields).model_dump()
         except ValidationError as exc:
             errors = exc.errors()
             messages = "; ".join(f"{'.'.join(map(str, e.get('loc', [])))}: {e.get('msg')}" for e in errors)
-            raise ValueError(f"Invalid customer data: {messages}") from exc
+            raise ValueError(f"Données invalides: {messages}") from exc
         # normalize and pre-checks
         validated = self._normalize(validated)
         # assign ownership by default when the caller is a sales user and no owner provided
@@ -59,16 +59,16 @@ class CustomerService:
     def update(self, user, customer_id: int, **fields):
         customer = self.repo.get_by_id(customer_id)
         if not customer:
-            raise ValueError("Customer not found")
+            raise ValueError("Client non trouvé")
         # ownership check: allow update if owner or has explicit permission
         if getattr(customer, 'user_sales_id', None) != getattr(user, 'id', None) and not self.perm.can_update_customer(user, customer):
-            raise PermissionError("User not allowed to update this customer")
+            raise PermissionError("Permission refuseée")
         try:
             validated = CustomerUpdate(**fields).model_dump(exclude_none=True)
         except ValidationError as exc:
             errors = exc.errors()
             messages = "; ".join(f"{'.'.join(map(str, e.get('loc', [])))}: {e.get('msg')}" for e in errors)
-            raise ValueError(f"Invalid customer data: {messages}") from exc
+            raise ValueError(f"Données invalides: {messages}") from exc
         # normalize and pre-checks
         validated = self._normalize(validated)
         if 'user_sales_id' in validated:
@@ -84,7 +84,7 @@ class CustomerService:
     def delete(self, user, customer_id: int):
         customer = self.repo.get_by_id(customer_id)
         if not customer:
-            raise ValueError("Customer not found")
+            raise ValueError("Client non trouvé")
         # ownership check: only owner or privileged user can delete
         if getattr(customer, 'user_sales_id', None) != getattr(user, 'id', None) and not self.perm.can_delete_customer(user, customer):
             raise PermissionError("User not allowed to delete this customer")
@@ -113,7 +113,7 @@ class CustomerService:
     def list_all(self, user):
         # visibility handled at CLI/service level; here return all if allowed
         if not self.perm.user_has_permission(user, "customer:read"):
-            raise PermissionError("User not allowed to read customers")
+            raise PermissionError("Permission refuseée")
         return self.repo.list_all()
 
     def list_mine(self, user):

@@ -64,7 +64,7 @@ def update_customer(user, session, perm_service, customer_id):
         click.echo('Client introuvable')
         return
     if not perm_service.can_update_customer(user, customer):
-        click.echo('Permission refusée: mise à jour impossible')
+        click.echo('Permission refusée')
         return
     mod_fields = [
         ('Prénom', 'customer_first_name'),
@@ -118,7 +118,7 @@ def list_all_customers(user, session, perm_service):
     try:
         customers = cust_service.list_all(user)
         customer_options = [(f"{c.id}: {c.customer_first_name} {c.customer_last_name}", c.id) for c in customers]
-        choice = prompt_list_or_empty(customer_options, empty_message="Vous n'avez pas encore de client", prompt_text='Choisir client')
+        choice = prompt_list_or_empty(customer_options, empty_message="Aucun client", prompt_text='Choisir client')
         if choice is None:
             return
         display_detail_customers(user, session, perm_service, choice)

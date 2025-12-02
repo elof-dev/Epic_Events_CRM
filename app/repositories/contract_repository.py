@@ -13,18 +13,6 @@ class ContractRepository:
     def __init__(self, session: Session) -> None:
         self.session = session
 
-    def get_by_id(self, contract_id: int) -> Contract | None:
-        return self.session.query(Contract).filter(Contract.id == contract_id).one_or_none()
-
-    def list_all(self) -> list[Contract]:
-        return self.session.query(Contract).all()
-
-    def list_by_management_user(self, user_id: int) -> list[Contract]:
-        return self.session.query(Contract).filter(Contract.user_management_id == user_id).all()
-
-    def list_by_customer_ids(self, customer_ids: list[int]) -> list[Contract]:
-        return self.session.query(Contract).filter(Contract.customer_id.in_(customer_ids)).all()
-
     def create(self, **fields) -> Contract:
         c = Contract(**fields)
         self.session.add(c)
@@ -40,3 +28,16 @@ class ContractRepository:
     def delete(self, contract: Contract) -> None:
         self.session.delete(contract)
         self.session.flush()
+    def get_by_id(self, contract_id: int) -> Contract | None:
+        return self.session.query(Contract).filter(Contract.id == contract_id).one_or_none()
+
+    def list_all(self) -> list[Contract]:
+        return self.session.query(Contract).all()
+
+    def list_by_management_user(self, user_id: int) -> list[Contract]:
+        return self.session.query(Contract).filter(Contract.user_management_id == user_id).all()
+
+    def list_by_customer_ids(self, customer_ids: list[int]) -> list[Contract]:
+        return self.session.query(Contract).filter(Contract.customer_id.in_(customer_ids)).all()
+
+    
