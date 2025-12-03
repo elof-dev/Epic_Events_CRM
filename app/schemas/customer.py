@@ -27,7 +27,7 @@ class BaseCustomer(BaseModel):
     def _validate_name(cls, v):
         if v is None:
             return None
-        s = v.strip()
+        s = v.strip().lower().capitalize()
         if not (1 <= len(s) <= 100):
             raise ValueError('Doit contenir entre 1 et 100 caractères')
         if not NAME_PATTERN.match(s):
@@ -43,6 +43,22 @@ class BaseCustomer(BaseModel):
             raise ValueError('Téléphone : longueur invalide (max 20)')
         if not PHONE_PATTERN.match(s):
             raise ValueError('Téléphone : uniquement chiffres et un préfixe + optionnel')
+        return s
+    
+    @field_validator('email')
+    def normalize_email(cls, v):
+        if v is None:
+            return None
+        return v.strip().lower()
+    
+    
+    @field_validator('company_name')
+    def _validate_company_name(cls, v):
+        if v is None:
+            return None
+        s = v.strip().lower().capitalize()
+        if not (1 <= len(s) <= 100):
+            raise ValueError('Nom de l\'entreprise : longueur invalide (max 100)')
         return s
 
 

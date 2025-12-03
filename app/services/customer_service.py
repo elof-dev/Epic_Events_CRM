@@ -119,12 +119,12 @@ class CustomerService:
 
     def list_all(self, user):
         # visibility handled at CLI/service level; here return all if allowed
-        if not self.perm.can_read_customer(user):
+        if not self.perm.user_has_permission(user, 'customer:read'):
             raise PermissionError("Permission refuseée")
         return self.repo.list_all()
 
     def list_mine(self, user):
-        if not self.perm.can_read_customer(user):
+        if not self.perm.user_has_permission(user, 'customer:read'):
             raise PermissionError("Permission refuseée")
         return self.repo.list_by_sales_user(user.id)
 

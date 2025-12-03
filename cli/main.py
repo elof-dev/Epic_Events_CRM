@@ -1,6 +1,7 @@
 import click
 from cli.crm_interface import run_interface
 from app.db import init_db as init_db_module
+import cli.sentry as sentry_module
 
 @click.group()
 def cli():
@@ -15,6 +16,8 @@ def run():
     init_db_module.main()
     click.echo('Réinitialisation terminée. Démarrage de l\'interface...')
     # delegate to crm_interface
+    sentry_module.init_sentry()
+    raise RuntimeError("Erreur de test Sentry")
     run_interface()
 
 

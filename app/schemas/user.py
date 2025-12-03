@@ -56,6 +56,12 @@ class BaseUser(BaseModel):
         if not PHONE_PATTERN.match(s):
             raise ValueError('Téléphone : uniquement chiffres et un préfixe + optionnel')
         return s
+    
+    @field_validator('email')
+    def normalize_email(cls, v):
+        if v is None:
+            return None
+        return v.strip().lower()
 
     @field_validator('password')
     def _validate_password(cls, v):

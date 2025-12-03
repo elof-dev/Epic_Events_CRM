@@ -104,7 +104,7 @@ class EventService:
 
 
         # sinon : vérification générique des permissions pour les autres rôles
-        if role_name not in ('support', 'management', 'sales') and not self.perm.can_update_event(user, event, keys):
+        if role_name not in ('support', 'management', 'sales') and not self.perm.user_has_permission(user, "event:update"):
             raise PermissionError("User not allowed to update this event")
 
         # valider les champs fournis via Pydantic

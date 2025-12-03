@@ -29,7 +29,7 @@ class EventBase(BaseModel):
     def _validate_name(cls, v):
         if v is None:
             return None
-        s = v.strip()
+        s = v.strip().lower().capitalize()
         if not (1 <= len(s) <= 255):
             raise ValueError('Le nom de l\'événement doit contenir entre 1 et 255 caractères')
         return s
