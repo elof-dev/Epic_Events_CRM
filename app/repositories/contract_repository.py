@@ -28,6 +28,7 @@ class ContractRepository:
     def delete(self, contract: Contract) -> None:
         self.session.delete(contract)
         self.session.flush()
+        
     def get_by_id(self, contract_id: int) -> Contract | None:
         return self.session.query(Contract).filter(Contract.id == contract_id).one_or_none()
 

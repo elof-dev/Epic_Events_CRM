@@ -11,24 +11,8 @@ from typing import Optional
 class UserService:
     """Service de gestion des utilisateurs.
 
-    Rôle : centraliser la logique applicative liée aux utilisateurs en
-    s'appuyant sur `UserRepository` pour les opérations de persistance et
-    sur `permission_service` pour vérifier les permissions générales.
-
-    Ce que la classe renvoie / fournit :
-    - `list_all(user)` : retourne une liste d'objets `User` (tous les utilisateurs accessibles).
-    - `get_by_id(user, user_id)` : retourne un objet `User` par son identifiant.
-    - `create(current_user, **fields)` : crée un nouvel utilisateur et retourne
-        l'objet `User` créé (attend `password` et `role_id`).
-    - `update(current_user, user_id, **fields)` : met à jour et retourne l'objet `User` mis à jour.
-    - `delete(current_user, user_id)` : supprime l'utilisateur (ne retourne rien) ;
-        l'opération vérifie d'abord que l'utilisateur n'est référencé par aucun contrat/événement/client.
-
-    Remarques :
-    - Les méthodes utilisent `permission_service.user_has_permission` pour
-        valider les droits CRUD. Les vérifications fines d'appartenance doivent
-        être effectuées par la couche de présentation si nécessaire.
-    - `create` hache le mot de passe via `AuthService` avant de déléguer au dépôt.
+   Logique métier :
+   - création : 
     """
 
     def __init__(self, session, permission_service):

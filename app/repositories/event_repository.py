@@ -13,18 +13,6 @@ class EventRepository:
     def __init__(self, session: Session) -> None:
         self.session = session
 
-    def get_by_id(self, event_id: int) -> Event | None:
-        return self.session.query(Event).filter(Event.id == event_id).one_or_none()
-
-    def list_all(self) -> list[Event]:
-        return self.session.query(Event).all()
-
-    def list_by_support_user(self, user_id: int) -> list[Event]:
-        return self.session.query(Event).filter(Event.user_support_id == user_id).all()
-
-    def list_by_customer(self, customer_id: int) -> list[Event]:
-        return self.session.query(Event).filter(Event.customer_id == customer_id).all()
-
     def create(self, **fields) -> Event:
         e = Event(**fields)
         self.session.add(e)
@@ -40,3 +28,17 @@ class EventRepository:
     def delete(self, event: Event) -> None:
         self.session.delete(event)
         self.session.flush()
+
+    def get_by_id(self, event_id: int) -> Event | None:
+        return self.session.query(Event).filter(Event.id == event_id).one_or_none()
+
+    def list_all(self) -> list[Event]:
+        return self.session.query(Event).all()
+
+    def list_by_support_user(self, user_id: int) -> list[Event]:
+        return self.session.query(Event).filter(Event.user_support_id == user_id).all()
+
+    def list_by_customer(self, customer_id: int) -> list[Event]:
+        return self.session.query(Event).filter(Event.customer_id == customer_id).all()
+
+    

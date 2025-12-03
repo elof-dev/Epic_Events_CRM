@@ -57,8 +57,7 @@ class EventCreate(EventBase):
     contract_id: Annotated[int, Field(ge=1)]
     customer_id: Annotated[int, Field(ge=1)]
     event_name: Annotated[str, Field(max_length=255)]
-    start_datetime: datetime
-    end_datetime: datetime
+
 
 
 class EventUpdate(EventBase):

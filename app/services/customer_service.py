@@ -22,9 +22,12 @@ class CustomerService:
     - `list_mine(user)` : retourne la liste des clients assignés au commercial (`user.id`).
 
     Remarques :
-    - Cette classe vérifie les permissions générales (CRUD) mais ne gère pas
-        l'assignation ou les vérifications fines d'appartenance ; ces règles
-        doivent être appliquées par la couche de présentation (CLI/views).
+    - Cette classe vérifie les permissions générales (CRUD) et applique
+        également des vérifications fines d'autorisation (ownership)
+        pour assurer une défense en profondeur. Les vues peuvent continuer
+        d'utiliser `perm_service` pour afficher/masquer les actions, mais
+        le service vérifie aussi les autorisations avant d'exécuter les
+        opérations sensibles.
     """
 
     def __init__(self, session, permission_service):
@@ -35,7 +38,9 @@ class CustomerService:
     def create(self, user, **fields):
         if not self.perm.can_create_customer(user):
             raise PermissionError("Permission refuseée")
-        # creation logic: service does not enforce ownership here; views handle ownership assignment
+        # creation logic: le service peut assigner par défaut le sales caller
+        # comme propriétaire si none fourni; les règles d'autorisation sont
+        # également appliquées par `perm`.
         try:
             validated = CustomerCreate(**fields).model_dump()
         except ValidationError as exc:
@@ -60,9 +65,10 @@ class CustomerService:
         customer = self.repo.get_by_id(customer_id)
         if not customer:
             raise ValueError("Client non trouvé")
-        # ownership check: allow update if owner or has explicit permission
-        if getattr(customer, 'user_sales_id', None) != getattr(user, 'id', None) and not self.perm.can_update_customer(user, customer):
-            raise PermissionError("Permission refuseée")
+
+        # Vérification d'autorisation centralisée
+        if not self.perm.can_update_customer(user, customer):
+            raise PermissionError("Permission refusée")
         try:
             validated = CustomerUpdate(**fields).model_dump(exclude_none=True)
         except ValidationError as exc:
@@ -85,9 +91,9 @@ class CustomerService:
         customer = self.repo.get_by_id(customer_id)
         if not customer:
             raise ValueError("Client non trouvé")
-        # ownership check: only owner or privileged user can delete
-        if getattr(customer, 'user_sales_id', None) != getattr(user, 'id', None) and not self.perm.can_delete_customer(user, customer):
-            raise PermissionError("User not allowed to delete this customer")
+        # Vérification d'autorisation centralisée
+        if not self.perm.can_delete_customer(user, customer):
+            raise PermissionError("Permission refusée")
 
         # refuse deletion if customer has contracts or events
         from app.models.contract import Contract
@@ -112,11 +118,13 @@ class CustomerService:
 
     def list_all(self, user):
         # visibility handled at CLI/service level; here return all if allowed
-        if not self.perm.user_has_permission(user, "customer:read"):
+        if not self.perm.can_read_customer(user):
             raise PermissionError("Permission refuseée")
         return self.repo.list_all()
 
     def list_mine(self, user):
+        if not self.perm.can_read_customer(user):
+            raise PermissionError("Permission refuseée")
         return self.repo.list_by_sales_user(user.id)
 
     # ---- helpers ----

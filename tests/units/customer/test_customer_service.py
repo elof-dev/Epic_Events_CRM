@@ -19,6 +19,9 @@ class DummyPerm:
     def can_delete_customer(self, user, customer):
         return self.allowed
 
+    def can_read_customer(self, user):
+        return self.allowed
+
     def user_has_permission(self, user, perm):
         return self.allowed
 

@@ -1,12 +1,8 @@
 [tool.poetry]
-name = "epic_events_crm"
+name = "epic_events"
 version = "0.1.0"
-description = "Simple CRM for learning purposes"
 authors = ["epic_events"]
-packages = [
-	{ include = "app" },
-	{ include = "cli" }
-]
+
 
 [tool.poetry.dependencies]
 python = "^3.13"

@@ -4,6 +4,22 @@ from datetime import datetime
 from cli.helpers import prompt_select_option, prompt_list_or_empty, prompt_detail_actions
 from app.db.transaction import transactional
 
+def get_event_menu_options(user, perm_service):
+    """Return the list of (label, action) menu options for the given user.
+
+    This is extracted to a helper to make unit testing the CLI menu easier.
+    """
+    options = []
+    if perm_service.user_has_permission(user, 'event:read'):
+        options.append(('Afficher tous les évènements', 'all'))
+        if user.role.name == 'support':
+            options.append(('Mes évènements', 'mine'))
+    if user.role.name == 'sales' and perm_service.user_has_permission(user, 'event:create'):
+        options.append(('Créer un évènement', 'create'))
+    if user.role.name == 'management' and perm_service.user_has_permission(user, 'event:read'):
+        options.append(('Evènements sans support assigned', 'nosupport'))
+    return options
+
 
 def main_event_menu(user, session, perm_service):
     click.echo('\n=== Gestion des évènements ===')
@@ -22,43 +38,30 @@ def main_event_menu(user, session, perm_service):
             events_without_support(user, session, perm_service)
 
 
-def get_event_menu_options(user, perm_service):
-    """Return the list of (label, action) menu options for the given user.
-
-    This is extracted to a helper to make unit testing the CLI menu easier.
-    """
-    options = []
-    if perm_service.user_has_permission(user, 'event:read'):
-        options.append(('Afficher tous les évènements', 'all'))
-        if user.role.name == 'support':
-            options.append(('Mes évènements', 'mine'))
-    if user.role.name == 'sales' and perm_service.user_has_permission(user, 'event:create'):
-        options.append(('Créer un évènement', 'create'))
-    if user.role.name == 'management' and perm_service.user_has_permission(user, 'event:read'):
-        options.append(('Evènements sans support assigned', 'nosupport'))
-    return options
 def create_event(user, session, perm_service):
     event_service = EventService(session, perm_service)
-    # only sales may create events per business rules (enforced in view)
-    if not perm_service.user_has_permission(user, 'event:create') or user.role.name != 'sales':
-        click.echo('Permission refusée: création impossible')
+    # check des permissions même si le menu n'affiche cette action que si autorisée
+    if not perm_service.user_has_permission(user, 'event:create'):
+        click.echo('Permission refusée')
         return
     try:
         contract_id = click.prompt('ID du contrat lié')
+        customer_id = click.prompt('ID du client lié')
         event_name = click.prompt('Nom de l\'évènement')
-        start_raw = click.prompt('Date/heure de début (YYYY-MM-DD HH:MM)')
-        end_raw = click.prompt('Date/heure de fin (YYYY-MM-DD HH:MM)')
+        start_datetime = click.prompt('Date/heure de début (YYYY-MM-DD HH:MM)', default='')
+        end_datetime = click.prompt('Date/heure de fin (YYYY-MM-DD HH:MM)', default='')
         location = click.prompt('Lieu', default='')
         attendees = click.prompt('Nombre participants', default='0')
-        support_id_raw = click.prompt('ID support (optionnel)', default='')
+        support_id = click.prompt('ID support', default='')
         fields = {
             'contract_id': contract_id,
+            'customer_id': customer_id,
             'event_name': event_name,
-            'start_datetime': start_raw,
-            'end_datetime': end_raw,
+            'start_datetime': start_datetime or None,
+            'end_datetime': end_datetime or None,
             'location': location or None,
             'attendees': attendees or None,
-            'user_support_id': support_id_raw or None,
+            'user_support_id': support_id or None,
         }
         # enforce business rule at view level: contract must be signed and belong to this sales user
         from app.models.contract import Contract
@@ -199,8 +202,9 @@ def update_event(current_user, session, perm_service, event_id):
         return
 
     mod_fields = [
+        ('Client', 'customer_id'),
+        ('Contrat', 'contract_id'),
         ('Nom', 'event_name'),
-        ('Numéro', 'event_id'),
         ('Début (YYYY-MM-DD HH:MM)', 'start_datetime'),
         ('Fin (YYYY-MM-DD HH:MM)', 'end_datetime'),
         ('Lieu', 'location'),

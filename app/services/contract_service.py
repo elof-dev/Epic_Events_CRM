@@ -68,11 +68,12 @@ class ContractService:
 
     def update(self, user, contract_id: int, **fields):
         contract = self.repo.get_by_id(contract_id)
+        
+        if not self.perm.can_update_contract(user, contract):
+            raise PermissionError("Permission refusée")
         if not contract:
             raise ValueError("Contrat non trouvé")
-        # contrôle d'appartenance : autorisé si le manager propriétaire ou si la permission l'autorise
-        if getattr(contract, 'user_management_id', None) != getattr(user, 'id', None) and not self.perm.can_update_contract(user, contract):
-            raise PermissionError("Permission refusée")
+        
         try:
             validated = ContractUpdate(**fields).model_dump(exclude_none=True)
         except ValidationError as exc:
@@ -94,11 +95,12 @@ class ContractService:
 
     def delete(self, user, contract_id: int):
         contract = self.repo.get_by_id(contract_id)
+
+        if not self.perm.can_delete_contract(user, contract):
+            raise PermissionError("Permission refusée")
         if not contract:
             raise ValueError("Contrat non trouvé")
-        # contrôle d'appartenance : seul le manager propriétaire ou un utilisateur privilégié peut supprimer
-        if getattr(contract, 'user_management_id', None) != getattr(user, 'id', None) and not self.perm.can_delete_contract(user, contract):
-            raise PermissionError("Permission refusée")
+
 
         # refuse deletion if contract has events
         from app.models.event import Event
@@ -113,18 +115,19 @@ class ContractService:
             raise
 
     def list_all(self, user):
-        if not self.perm.user_has_permission(user, "contract:read"):
+        if not self.perm.can_read_contract(user):
             raise PermissionError("Utilisateur non autorisé à lire les contrats")
         return self.repo.list_all()
 
-    def list_mine(self, user):
-        # alias simple ; les vues peuvent filtrer davantage si nécessaire
-        return self.repo.list_by_management_user(getattr(user, 'id', None))
 
-    def list_by_management_user(self, user_id: int):
+    def list_by_management_user(self, user, user_id: int):
+        if not self.perm.can_read_contract(user):
+            raise PermissionError("Utilisateur non autorisé à lire les contrats")
         return self.repo.list_by_management_user(user_id)
 
-    def list_by_customer_ids(self, customer_ids: list):
+    def list_by_customer_ids(self, user, customer_ids: list):
+        if not self.perm.can_read_contract(user):
+            raise PermissionError("Utilisateur non autorisé à lire les contrats")
         return self.repo.list_by_customer_ids(customer_ids)
 
     # ---- helpers ----
