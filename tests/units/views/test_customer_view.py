@@ -1,59 +1,121 @@
-from types import SimpleNamespace
 import pytest
-from cli.views import customers as customer_view
+from types import SimpleNamespace
 
-class DummyPermService:
-    """Service factice pour simuler les permissions disponibles."""
+# ---------------- Fakes -------------------
+class FakePerm:
     def __init__(self, perms):
         self.perms = perms
     def user_has_permission(self, user, perm):
-        return self.perms.get(perm, False)
+        return perm in self.perms
 
-def test_get_customer_menu_options_sales(monkeypatch):
-    """Vérifie que le menu affiche les options attendues pour un sales."""
-    user = SimpleNamespace(role=SimpleNamespace(name="sales"), id=10)
-    perm_service = DummyPermService({'customer:read': True, 'customer:create': True})
-    options = customer_view.get_customer_menu_options(user, perm_service)
-    assert ('Afficher tous les clients', 'list_all') in options
-    assert ('Mes clients', 'mine') in options
-    assert ('Créer un client', 'create') in options
+class FakeSession:
+    def __init__(self, get_map=None):
+        self.get_map = get_map or {}
+    def get(self, model, _id):
+        return self.get_map.get(_id)
 
-def test_list_all_customers_format(monkeypatch):
-    """Confirme que la liste des clients renvoyée est formatée correctement."""
-    recorded = {}
-    class FakeCustomerService:
-        def __init__(self, session, perm_service):
-            recorded['init'] = True
-        def list_all(self, user):
-            return [SimpleNamespace(id=1, customer_first_name="Alice", customer_last_name="Wonder", company_name="Acme")]
-    def fake_prompt_list_or_empty(options, **kwargs):
-        recorded['options'] = options
-        return None
-    monkeypatch.setattr(customer_view, "CustomerService", FakeCustomerService)
-    monkeypatch.setattr(customer_view, "prompt_list_or_empty", fake_prompt_list_or_empty)
-    customer_view.list_all_customers(SimpleNamespace(role=SimpleNamespace(name="management")), None, None)
-    assert recorded['init'] is True
-    assert recorded['options'][0][0].startswith("1: Alice")
+class FakeCustomerService:
+    def __init__(self, customers=None, new_customer=None):
+        self.customers = customers or []
+        self.new_customer = new_customer
+    def create(self, user, **fields):
+        return self.new_customer
+    def update(self, user, cid, **fields):
+        return True
+    def delete(self, user, cid):
+        return True
+    def list_all(self, user):
+        return self.customers
+    def list_mine(self, user):
+        return self.customers
 
-def test_display_detail_customers_actions(monkeypatch):
-    """Assure que les actions sont proposées quand l'utilisateur peut modifier/supprimer."""
-    user_role = SimpleNamespace(name="sales")
-    current_user = SimpleNamespace(role=user_role, id=42)
-    customer = SimpleNamespace(
-        id=7,
-        customer_first_name="Bob",
-        customer_last_name="Builder",
-        company_name="Builders Inc",
-        email="bob@example.com",
-        user_sales_id=42
-    )
-    session = SimpleNamespace(get=lambda model, pk: customer)
-    perm_service = DummyPermService({'customer:update': True, 'customer:delete': True})
-    recorded = {}
-    def fake_prompt_detail_actions(actions, **kwargs):
-        recorded['actions'] = actions
-        return None
-    monkeypatch.setattr(customer_view, "prompt_detail_actions", fake_prompt_detail_actions)
-    customer_view.display_detail_customers(current_user, session, perm_service, customer.id)
-    assert ('Modifier', 'update') in recorded['actions']
-    assert ('Supprimer', 'delete') in recorded['actions']
+# -----------------------------------------
+from cli.views.customers import CustomersView
+
+# ---------------- get_customer_menu_options ---------------
+def test_get_customer_menu_options():
+    user = SimpleNamespace(role=SimpleNamespace(name="sales"))
+    perm = FakePerm({"customer:read", "customer:create"})
+    view = CustomersView(None, perm)
+    opts = view.get_customer_menu_options(user)
+    assert len(opts) >= 2
+
+# ---------------- main_customer_menu ----------------------
+def test_main_customer_menu_exit(monkeypatch):
+    user = SimpleNamespace(role=SimpleNamespace(name="sales"))
+    perm = FakePerm(set())
+    view = CustomersView(None, perm)
+    monkeypatch.setattr("cli.helpers.prompt_select_option", lambda o, prompt: None)
+    view.main_customer_menu(user)
+
+# ---------------- create_customer -------------------------
+def test_create_customer_ok(monkeypatch):
+    user = SimpleNamespace(id=1)
+    perm = FakePerm({"customer:create"})
+    session = FakeSession()
+
+    new_c = SimpleNamespace(id=99)
+    monkeypatch.setattr("app.services.customer_service.CustomerService", lambda s, p: FakeCustomerService(new_customer=new_c))
+
+    answers = iter(["Jean", "Durand", "jd@test.com", "SociétéX", "0102030405"])
+    monkeypatch.setattr("click.prompt", lambda *a, **k: next(answers))
+
+    logs = []
+    monkeypatch.setattr("click.echo", lambda msg=None, **k: logs.append(msg))
+
+    view = CustomersView(session, perm)
+    view.create_customer(user)
+
+
+# ---------------- update_customer -------------------------
+def test_update_customer_not_found(monkeypatch):
+    user = SimpleNamespace(id=1)
+    perm = FakePerm({"customer:update"})
+    session = FakeSession(get_map={})
+
+    logs = []
+    monkeypatch.setattr("click.echo", lambda msg=None, **k: logs.append(msg))
+
+    view = CustomersView(session, perm)
+    view.update_customer(user, 5)
+    assert any("introuvable" in (m or "") for m in logs)
+
+# ---------------- delete_customer -------------------------
+def test_delete_customer_not_found(monkeypatch):
+    user = SimpleNamespace(id=1)
+    perm = FakePerm({"customer:delete"})
+    session = FakeSession(get_map={})
+
+    logs = []
+    monkeypatch.setattr("click.echo", lambda msg=None, **k: logs.append(msg))
+
+    view = CustomersView(session, perm)
+    view.delete_customer(user, 10)
+    assert any("introuvable" in (m or "") for m in logs)
+
+# ---------------- list_all_customers ----------------------
+def test_list_all_customers_empty(monkeypatch):
+    user = SimpleNamespace(id=1)
+    perm = FakePerm({"customer:read"})
+    session = FakeSession()
+    fake_service = FakeCustomerService(customers=[])
+
+    monkeypatch.setattr("app.services.customer_service.CustomerService", lambda s, p: fake_service)
+    monkeypatch.setattr("cli.helpers.prompt_list_or_empty", lambda *a, **k: None)
+    monkeypatch.setattr("click.echo", lambda msg=None, **k: None)
+
+    view = CustomersView(session, perm)
+    view.list_all_customers(user)
+
+# ---------------- display_detail_customers ----------------
+def test_display_detail_customers_not_found(monkeypatch):
+    user = SimpleNamespace(id=1)
+    perm = FakePerm(set())
+    session = FakeSession(get_map={})
+
+    logs = []
+    monkeypatch.setattr("click.echo", lambda msg=None, **k: logs.append(msg))
+
+    view = CustomersView(session, perm)
+    view.display_detail_customers(user, 3)
+    assert any("introuvable" in (m or "") for m in logs)

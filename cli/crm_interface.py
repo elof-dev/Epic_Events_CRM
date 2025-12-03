@@ -3,10 +3,10 @@ from app.db.session import get_session
 from app.repositories.user_repository import UserRepository
 from app.services.auth_service import AuthService
 from app.services.permission_service import PermissionService
-from cli.views.users import main_user_menu
-from cli.views.customers import main_customer_menu
-from cli.views.contracts import main_contract_menu
-from cli.views.events import main_event_menu
+from cli.views.users import UsersView
+from cli.views.customers import CustomersView
+from cli.views.contracts import ContractsView
+from cli.views.events import EventsView
 
 
 
@@ -44,13 +44,21 @@ def run_interface():
                 click.echo('\nMenu principal :')
                 options = []
                 if 'display_menu_users' in services:
-                    options.append(('Gestion des utilisateurs', main_user_menu))
+                    def users_menu_handler(current_user, db_session, perm_service):
+                        UsersView(db_session, perm_service).main_user_menu(current_user)
+                    options.append(('Gestion des utilisateurs', users_menu_handler))
                 if 'display_menu_customers' in services:
-                    options.append(('Gestion des clients', main_customer_menu))
+                    def customers_menu_handler(current_user, db_session, perm_service):
+                        CustomersView(db_session, perm_service).main_customer_menu(current_user)
+                    options.append(('Gestion des clients', customers_menu_handler))
                 if 'display_menu_contracts' in services:
-                    options.append(('Gestion des contrats', main_contract_menu))
+                    def contracts_menu_handler(current_user, db_session, perm_service):
+                        ContractsView(db_session, perm_service).main_contract_menu(current_user)
+                    options.append(('Gestion des contrats', contracts_menu_handler))
                 if 'display_menu_events' in services:
-                    options.append(('Gestion des évènements', main_event_menu))
+                    def events_menu_handler(current_user, db_session, perm_service):
+                        EventsView(db_session, perm_service).main_event_menu(current_user)
+                    options.append(('Gestion des évènements', events_menu_handler))
 
                 click.echo('0. Déconnexion')
                 for idx, (label, _) in enumerate(options, start=1):

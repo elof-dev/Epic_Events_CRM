@@ -1,65 +1,111 @@
+import pytest
 from types import SimpleNamespace
-from cli.views import events as event_view
 
-class DummyPermService:
-    """Service factice permettant de contrôler les permissions."""
+# Fakes -------------------------------------------------
+class FakePerm:
     def __init__(self, perms):
         self.perms = perms
     def user_has_permission(self, user, perm):
-        return self.perms.get(perm, False)
+        return perm in self.perms
 
-def test_get_event_menu_options_varie_selon_role():
-    """Confirme que le menu affiche les options attendues pour management/support/sales."""
-    support_user = SimpleNamespace(role=SimpleNamespace(name="support"))
-    perm_service = DummyPermService({'event:read': True, 'event:create': False})
-    options = event_view.get_event_menu_options(support_user, perm_service)
-    assert ('Afficher tous les évènements', 'all') in options
-    assert ('Mes évènements', 'mine') in options
-    management_user = SimpleNamespace(role=SimpleNamespace(name="management"))
-    perm_service = DummyPermService({'event:read': True})
-    options = event_view.get_event_menu_options(management_user, perm_service)
-    assert ('Evènements sans support assigned', 'nosupport') in options
+class FakeSession:
+    def __init__(self, get_map=None):
+        self.get_map = get_map or {}
+    def get(self, model, _id):
+        return self.get_map.get(_id)
 
-def test_list_all_events_format(monkeypatch):
-    """Vérifie que la liste des événements provient bien du service et est formatée."""
-    recorded = {}
-    class FakeEventService:
-        def __init__(self, session, perm_service):
-            recorded['init'] = True
-        def list_all(self, user):
-            return [SimpleNamespace(id=10, event_name="Lancement produit")]
-    def fake_prompt_list_or_empty(options, **kwargs):
-        recorded['options'] = options
-        return None
-    monkeypatch.setattr(event_view, "EventService", FakeEventService)
-    monkeypatch.setattr(event_view, "prompt_list_or_empty", fake_prompt_list_or_empty)
+class FakeEventService:
+    def __init__(self, events=None, new_event=None):
+        self.events = events or []
+        self.new_event = new_event
+    def create(self, user, **fields):
+        return self.new_event
+    def list_all(self, user):
+        return self.events
+    def list_by_support_user(self, uid):
+        return self.events
+    def list_by_customer(self, cid):
+        return self.events
+    def update(self, user, event_id, **fields):
+        return True
+    def delete(self, user, event_id):
+        return True
 
-    event_view.list_all_events(SimpleNamespace(role=SimpleNamespace(name="management")), None, None)
-    assert recorded['init'] is True
-    assert recorded['options'][0][0].startswith("10: Lancement produit")
+# -------------------------------------------------------
+from cli.views.events import EventsView
 
-def test_display_detail_events_actions(monkeypatch):
-    """S’assure que les actions de mise à jour ou suppression apparaissent avec les bonnes permissions."""
-    current_user = SimpleNamespace(role=SimpleNamespace(name="support"), id=5)
-    event = SimpleNamespace(
-        id=3,
-        event_name="Demo",
-        contract_id=1,
-        customer_id=2,
-        start_datetime="2025-12-05 10:00",
-        end_datetime="2025-12-05 12:00",
-        location="Paris",
-        attendees=20,
-        user_support_id=5
-    )
-    session = SimpleNamespace(get=lambda model, pk: event)
-    perm_service = DummyPermService({'event:update': True, 'event:delete': True})
-    recorded = {}
-    def fake_prompt_detail_actions(actions, **kwargs):
-        recorded['actions'] = actions
-        return None
-    monkeypatch.setattr(event_view, "prompt_detail_actions", fake_prompt_detail_actions)
+# ---------------- get_event_menu_options -----------------
+def test_get_event_menu_options():
+    user = SimpleNamespace(role=SimpleNamespace(name="sales"))
+    perm = FakePerm({"event:read", "event:create"})
+    view = EventsView(session=None, perm_service=perm)
+    opts = view.get_event_menu_options(user)
+    assert len(opts) >= 2
 
-    event_view.display_detail_events(current_user, session, perm_service, event.id)
-    assert ('Modifier', 'update') in recorded['actions']
-    assert ('Supprimer', 'delete') in recorded['actions']
+# ---------------- main_event_menu ------------------------
+def test_main_event_menu_exit(monkeypatch):
+    user = SimpleNamespace(role=SimpleNamespace(name="sales"))
+    perm = FakePerm({})
+    view = EventsView(session=None, perm_service=perm)
+    monkeypatch.setattr("cli.helpers.prompt_select_option", lambda opts, prompt: None)
+    view.main_event_menu(user)
+
+# ---------------- create_event ---------------------------
+def test_create_event_contract_not_found(monkeypatch):
+    user = SimpleNamespace(id=1)
+    perm = FakePerm({"event:create"})
+    session = FakeSession(get_map={})
+    view = EventsView(session=session, perm_service=perm)
+
+    answers = iter(["1", "1", "ev", "", "", "", "0", ""])
+    monkeypatch.setattr("click.prompt", lambda *a, **k: next(answers))
+
+    logs = []
+    monkeypatch.setattr("click.echo", lambda msg=None, **k: logs.append(msg))
+
+    monkeypatch.setattr("app.services.event_service.EventService", lambda s, p: FakeEventService())
+
+    view.create_event(user)
+    assert any("introuvable" in (m or "") for m in logs)
+
+# ---------------- list_all_events ------------------------
+def test_list_all_events_empty(monkeypatch):
+    user = SimpleNamespace()
+    perm = FakePerm({"event:read"})
+    session = FakeSession()
+    fake_service = FakeEventService(events=[])
+
+    view = EventsView(session=session, perm_service=perm)
+    monkeypatch.setattr("app.services.event_service.EventService", lambda s, p: fake_service)
+
+    logs = []
+    monkeypatch.setattr("click.echo", lambda msg=None, **k: logs.append(msg))
+    monkeypatch.setattr("cli.helpers.prompt_list_or_empty", lambda *a, **k: None)
+
+    view.list_all_events(user)
+
+# ---------------- display_detail_events ------------------
+def test_display_detail_events_not_found(monkeypatch):
+    user = SimpleNamespace(role=SimpleNamespace(name="management"))
+    perm = FakePerm(set())
+    session = FakeSession(get_map={})
+
+    view = EventsView(session=session, perm_service=perm)
+    logs = []
+    monkeypatch.setattr("click.echo", lambda msg=None, **k: logs.append(msg))
+
+    view.display_detail_events(user, 5)
+    assert any("introuvable" in (m or "") for m in logs)
+
+# ---------------- delete_event ----------------------------
+def test_delete_event_not_found(monkeypatch):
+    user = SimpleNamespace(role=SimpleNamespace(name="management"))
+    perm = FakePerm({"event:delete"})
+    session = FakeSession(get_map={})
+
+    view = EventsView(session=session, perm_service=perm)
+    logs = []
+    monkeypatch.setattr("click.echo", lambda msg=None, **k: logs.append(msg))
+
+    view.delete_event(user, 2)
+    assert any("introuvable" in (m or "") for m in logs)

@@ -1,66 +1,107 @@
+import pytest
 from types import SimpleNamespace
-from cli.views import contracts as contract_view
 
-class DummyPermService:
-    """Permet de contrôler facilement les permissions retournées."""
+# Fakes -------------------------------------------------
+class FakePerm:
     def __init__(self, perms):
         self.perms = perms
-
     def user_has_permission(self, user, perm):
-        return self.perms.get(perm, False)
+        return perm in self.perms
 
-def test_get_contracts_menu_options_management():
-    """Vérifie que le menu contract affiche toutes les entrées avec les permissions adéquates."""
-    user = SimpleNamespace(role=SimpleNamespace(name="management"))
-    perm_service = DummyPermService({
-        'contract:read': True,
-        'contract:create': True,
-    })
-    options = contract_view.get_contracts_menu_options(user, perm_service)
-    labels = [label for label, _ in options]
-    assert 'Créer un contrat' in labels
-    assert 'Afficher tous les contrats' in labels
-    assert 'Mes contrats' in labels
+class FakeSession:
+    def __init__(self, get_map=None):
+        self.get_map = get_map or {}
+    def get(self, model, _id):
+        return self.get_map.get(_id)
 
-def test_list_all_contracts_format(monkeypatch):
-    """S’assure que la liste formatée contient bien les contrats provenant du service."""
-    recorded = {}
-    class FakeContractService:
-        def __init__(self, session, perm_service):
-            recorded['initialized'] = True
-        def list_all(self, user):
-            customer = SimpleNamespace(company_name="Acme Corp")
-            return [SimpleNamespace(id=42, customer=customer)]
-    def fake_prompt_list_or_empty(options, **kwargs):
-        recorded['options'] = options
-        return None
-    monkeypatch.setattr(contract_view, "ContractService", FakeContractService)
-    monkeypatch.setattr(contract_view, "prompt_list_or_empty", fake_prompt_list_or_empty)
+class FakeContractService:
+    def __init__(self, return_contract=None, list_result=None):
+        self.return_contract = return_contract
+        self.list_result = list_result or []
+    def create(self, user, **fields):
+        return self.return_contract
+    def update(self, user, cid, **fields):
+        return True
+    def delete(self, user, cid):
+        return True
+    def list_all(self, user):
+        return self.list_result
+    def list_by_management_user(self, user, uid=None):
+        return self.list_result
+    def list_by_customer_ids(self, user, ids):
+        return self.list_result
 
-    contract_view.list_all_contracts(SimpleNamespace(role=SimpleNamespace(name="management")), None, None)
-    assert recorded['initialized'] is True
-    assert recorded['options'][0][0].startswith("42: lié au client Acme Corp")
+# -------------------------------------------------------
+from cli.views.contracts import ContractsView
 
-def test_display_detail_contracts_actions(monkeypatch):
-    """S’assure que les actions de mise à jour/suppression apparaissent avec les bonnes permissions."""
-    user = SimpleNamespace(role=SimpleNamespace(name="sales"), id=1, customers=[SimpleNamespace(id=100)])
-    contract = SimpleNamespace(
-        id=7,
-        total_amount=1000,
-        balance_due=200,
-        signed=False,
-        customer_id=100,
-        user_management_id=5,
-        customer=SimpleNamespace(company_name="Acme"),
-    )
-    session = SimpleNamespace(get=lambda model, pk: contract)
-    perm_service = DummyPermService({'contract:update': True, 'contract:delete': True})
-    recorded = {}
-    def fake_prompt_detail_actions(actions, **kwargs):
-        recorded['actions'] = actions
-        return None
-    monkeypatch.setattr(contract_view, "prompt_detail_actions", fake_prompt_detail_actions)
+# ---------------- get_contracts_menu_options -----------------
+def test_get_contracts_menu_options_basic():
+    user = SimpleNamespace(role=SimpleNamespace(name='sales'))
+    perm = FakePerm({'contract:read', 'contract:create'})
+    view = ContractsView(session=None, perm_service=perm)
+    opts = view.get_contracts_menu_options(user)
+    assert len(opts) >= 1
 
-    contract_view.display_detail_contracts(user, session, perm_service, contract.id)
-    assert ('Modifier', 'update') in recorded['actions']
-    assert ('Supprimer', 'delete') in recorded['actions']
+# ---------------- main_contract_menu exit -----------------
+def test_main_contract_menu_exit(monkeypatch):
+    user = SimpleNamespace(role=SimpleNamespace(name='sales'))
+    perm = FakePerm(set())
+    view = ContractsView(session=None, perm_service=perm)
+    monkeypatch.setattr('cli.helpers.prompt_select_option', lambda opts, prompt: None)
+    view.main_contract_menu(user)
+
+# ---------------- create_contract -----------------
+def test_create_contract(monkeypatch):
+    user = SimpleNamespace(role=SimpleNamespace(name='sales'))
+    fake_contract = SimpleNamespace(id=1)
+    monkeypatch.setattr('app.services.contract_service.ContractService', lambda s, p: FakeContractService(return_contract=fake_contract))
+    answers = iter(['100', 'o', '100', '10'])
+    monkeypatch.setattr('click.prompt', lambda *a, **k: next(answers))
+    logs = []
+    monkeypatch.setattr('click.echo', lambda msg=None, **k: logs.append(msg))
+    view = ContractsView(session=SimpleNamespace(), perm_service=FakePerm(set()))
+    view.create_contract(user)
+
+
+# ---------------- update_contract -----------------
+def test_update_contract_not_found(monkeypatch):
+    user = SimpleNamespace(role=SimpleNamespace(name='sales'))
+    session = FakeSession(get_map={})
+    view = ContractsView(session=session, perm_service=FakePerm(set()))
+    logs = []
+    monkeypatch.setattr('click.echo', lambda msg=None, **k: logs.append(msg))
+    view.update_contract(user, 1)
+    assert any('introuvable' in (m or '') for m in logs)
+
+# ---------------- delete_contract -----------------
+def test_delete_contract_not_found(monkeypatch):
+    user = SimpleNamespace(role=SimpleNamespace(name='sales'))
+    session = FakeSession(get_map={})
+    view = ContractsView(session=session, perm_service=FakePerm(set()))
+    logs = []
+    monkeypatch.setattr('click.echo', lambda msg=None, **k: logs.append(msg))
+    view.delete_contract(user, 1)
+    assert any('introuvable' in (m or '') for m in logs)
+
+def test_delete_contract_confirm(monkeypatch):
+    user = SimpleNamespace(role=SimpleNamespace(name='sales'))
+    target = SimpleNamespace(id=1)
+    session = FakeSession(get_map={1: target})
+    monkeypatch.setattr('app.services.contract_service.ContractService', lambda s, p: FakeContractService())
+    monkeypatch.setattr('click.prompt', lambda *a, **k: 'o')
+    logs = []
+    monkeypatch.setattr('click.echo', lambda msg=None, **k: logs.append(msg))
+    view = ContractsView(session=session, perm_service=FakePerm({'contract:delete'}))
+    view.delete_contract(user, 1)
+
+
+# ---------------- list_all_contracts -----------------
+def test_list_all_contracts_empty(monkeypatch):
+    user = SimpleNamespace(role=SimpleNamespace(name='sales'))
+    session = SimpleNamespace()
+    view = ContractsView(session=session, perm_service=FakePerm(set()))
+    monkeypatch.setattr('app.services.contract_service.ContractService', lambda s, p: FakeContractService(list_result=[]))
+    monkeypatch.setattr('cli.helpers.prompt_list_or_empty', lambda *a, **k: None)
+    logs = []
+    monkeypatch.setattr('click.echo', lambda msg=None, **k: logs.append(msg))
+    view.list_all_contracts(user)

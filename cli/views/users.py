@@ -4,191 +4,188 @@ from cli.helpers import prompt_select_option, prompt_list_or_empty, prompt_detai
 from app.db.transaction import transactional
 
 
-def get_user_menu_options(user, perm_service):
-    options = []
-    if perm_service.user_has_permission(user, 'user:read'):
-        options.append(('Afficher tous les utilisateurs', 'list_all'))
-        options.append(('Filtrer par ID', 'filter_id'))
-    if perm_service.user_has_permission(user, 'user:create'):
-        options.append(('Créer un utilisateur', 'create'))
-    return options
+class UsersView:
+    def __init__(self, session, perm_service):
+        self.session = session
+        self.perm_service = perm_service
+        self.prompt_select_option = prompt_select_option
+        self.prompt_list_or_empty = prompt_list_or_empty
+        self.prompt_detail_actions = prompt_detail_actions
+        self.click = click
 
+    def get_user_menu_options(self, user):
+        options = []
+        if self.perm_service.user_has_permission(user, 'user:read'):
+            options.append(('Afficher tous les utilisateurs', 'list_all'))
+            options.append(('Filtrer par ID', 'filter_id'))
+        if self.perm_service.user_has_permission(user, 'user:create'):
+            options.append(('Créer un utilisateur', 'create'))
+        return options
 
-def main_user_menu(user, session, perm_service):
-    click.echo('\n=== Gestion des utilisateurs ===')
-    while True:
-        options = get_user_menu_options(user, perm_service)
-        action = prompt_select_option(options, prompt='Choix')
+    def main_user_menu(self, user):
+        self.click.echo('\n=== Gestion des utilisateurs ===')
+        while True:
+            options = self.get_user_menu_options(user)
+            action = self.prompt_select_option(options, prompt='Choix')
+            if action is None:
+                return
+            if action == 'list_all':
+                self.list_all_users(user)
+            elif action == 'filter_id':
+                self.filter_user_by_id(user)
+            elif action == 'create':
+                self.create_user(user)
+
+    def create_user(self, user):
+        user_service = UserService(self.session, self.perm_service)
+        try:
+            first = self.click.prompt('Prénom')
+            last = self.click.prompt('Nom')
+            username = self.click.prompt('Nom d\'utilisateur')
+            email = self.click.prompt('Email')
+            phone = self.click.prompt('Téléphone')
+
+            from app.models.role import Role
+            roles = self.session.query(Role).all()
+            if not roles:
+                self.click.echo('Aucun rôle disponible en base, annulation')
+                return
+            role_options = [(r.name, r.id) for r in roles]
+            role_id = self.prompt_select_option(role_options, prompt='Choisir rôle')
+            if role_id is None:
+                self.click.echo('Annulé')
+                return
+
+            password = self.click.prompt('Mot de passe', hide_input=True)
+            fields = {
+                'user_first_name': first,
+                'user_last_name': last,
+                'username': username,
+                'email': email,
+                'phone_number': phone,
+                'role_id': role_id,
+                'password': password,
+            }
+            with transactional(self.session):
+                new_user = user_service.create(user, **fields)
+            self.click.echo(f'Utilisateur créé id={new_user.id}')
+        except Exception as e:
+            self.click.echo(f'Erreur création: {e}')
+
+    def update_user(self, current_user, target_user_id):
+        from app.models.user import User
+        user_service = UserService(self.session, self.perm_service)
+        target = self.session.get(User, target_user_id)
+        if not target:
+            self.click.echo('Utilisateur introuvable')
+            return
+
+        update_fields = [
+            ('Prénom', 'user_first_name'),
+            ('Nom', 'user_last_name'),
+            ('Nom d\'utilisateur', 'username'),
+            ('Email', 'email'),
+            ('Téléphone', 'phone_number'),
+            ('Role', 'role_id'),
+            ('Mot de passe', 'password'),
+        ]
+        while True:
+            field_opts = [(label, field) for label, field in update_fields]
+            field_choice = self.prompt_select_option(field_opts, prompt='Choisir champ')
+            if field_choice is None:
+                break
+            label = next(lbl for lbl, fld in update_fields if fld == field_choice)
+            field = field_choice
+            if field == 'password':
+                new_val = self.click.prompt(f"{label} (laisser vide pour annuler)", hide_input=True, default='')
+                if not new_val:
+                    self.click.echo('Annulé')
+                    continue
+                upd = {'password': new_val}
+            else:
+                current_val = getattr(target, field) if field != 'role_id' else getattr(target.role, 'name', '')
+                if field == 'role_id':
+                    from app.models.role import Role
+                    roles = self.session.query(Role).all()
+                    role_opts = [(r.name, r.id) for r in roles]
+                    new_val = self.prompt_select_option(role_opts, prompt='Choisir rôle')
+                    if new_val is None:
+                        self.click.echo('Annulé')
+                        continue
+                    upd = {'role_id': new_val}
+                else:
+                    new_val = self.click.prompt(label, default=current_val if current_val is not None else '')
+                    upd = {field: (new_val if new_val != '' else current_val)}
+            try:
+                with transactional(self.session):
+                    user_service.update(current_user, target.id, **upd)
+                self.click.echo('Champ mis à jour')
+                target = self.session.get(User, target_user_id)
+            except Exception as e:
+                self.click.echo(f'Erreur mise à jour: {e}')
+
+    def delete_user(self, current_user, target_user_id):
+        from app.models.user import User
+        user_service = UserService(self.session, self.perm_service)
+        target = self.session.get(User, target_user_id)
+        if not target:
+            self.click.echo('Utilisateur introuvable')
+            return
+        try:
+            confirm = self.click.prompt('Confirmer suppression ? (o/n)', default='n')
+            if confirm.lower().startswith('o'):
+                with transactional(self.session):
+                    user_service.delete(current_user, target.id)
+                self.click.echo('Utilisateur supprimé')
+        except Exception as e:
+            self.click.echo(f'Erreur suppression: {e}')
+
+    def list_all_users(self, user):
+        user_service = UserService(self.session, self.perm_service)
+        try:
+            users = user_service.list_all(user)
+            user_options = [(
+                f"{u.id}: {u.user_first_name} {u.user_last_name} ({u.username})",
+                u.id,
+            ) for u in users]
+            choice = self.prompt_list_or_empty(user_options, empty_message='Aucun utilisateur', prompt_text='Choisir utilisateur')
+            if choice is None:
+                return
+            self.display_detail_users(user, choice)
+        except Exception as e:
+            self.click.echo(f'Erreur: {e}')
+
+    def filter_user_by_id(self, user):
+        user_service = UserService(self.session, self.perm_service)
+        try:
+            sel = self.click.prompt('Saisir l\'ID utilisateur (0=Retour)', type=int)
+            if sel == 0:
+                return
+            target = user_service.get_by_id(user, sel)
+            if not target:
+                self.click.echo('Utilisateur introuvable')
+                return
+            self.display_detail_users(user, target.id)
+        except Exception as e:
+            self.click.echo(f'Erreur: {e}')
+
+    def display_detail_users(self, current_user, target_user_id):
+        from app.models.user import User
+        target = self.session.get(User, target_user_id)
+        if not target:
+            self.click.echo('Utilisateur introuvable')
+            return
+        self.click.echo(f"\nID: {target.id}\nPrénom: {target.user_first_name}\nNom: {target.user_last_name}\nUsername: {target.username}\nEmail: {target.email}\nTéléphone: {target.phone_number}\nRole: {getattr(target.role, 'name', target.role_id)}")
+        actions = []
+        if self.perm_service.user_has_permission(current_user, 'user:update') and current_user.role.name == 'management':
+            actions.append(('Modifier', 'update'))
+        if self.perm_service.user_has_permission(current_user, 'user:delete') and current_user.role.name == 'management':
+            actions.append(('Supprimer', 'delete'))
+        action = self.prompt_detail_actions(actions, prompt_text='Choix')
         if action is None:
             return
-        if action == 'list_all':
-            list_all_users(user, session, perm_service)
-        elif action == 'filter_id':
-            filter_user_by_id(user, session, perm_service)
-        elif action == 'create':
-            create_user(user, session, perm_service)
+        if action == 'update':
+            self.update_user(current_user, target.id)
+        elif action == 'delete':
+            self.delete_user(current_user, target.id)
 
-
-def create_user(user, session, perm_service):
-    # initialise le service utilisateur
-    user_service = UserService(session, perm_service)
-
-    try:
-        first = click.prompt('Prénom')
-        last = click.prompt('Nom')
-        username = click.prompt('Nom d\'utilisateur')
-        email = click.prompt('Email')
-        phone = click.prompt('Téléphone')
-
-        # sélection du rôle parmi ceux en base et pas en dur
-        from app.models.role import Role
-        roles = session.query(Role).all()
-        if not roles:
-            click.echo('Aucun rôle disponible en base, annulation')
-            return
-        role_options = [(r.name, r.id) for r in roles]
-        role_id = prompt_select_option(role_options, prompt='Choisir rôle')
-        if role_id is None:
-            click.echo('Annulé')
-            return
-        
-        # mot de passe avec saisie masquée
-        password = click.prompt('Mot de passe', hide_input=True)
-        fields = {
-            'user_first_name': first,
-            'user_last_name': last,
-            'username': username,
-            'email': email,
-            'phone_number': phone,
-            'role_id': role_id,
-            'password': password,
-        }
-        with transactional(session):
-            new_user = user_service.create(user, **fields)
-        click.echo(f'Utilisateur créé id={new_user.id}')
-    except Exception as e:
-        click.echo(f'Erreur création: {e}')
-
-def update_user(current_user, session, perm_service, target_user_id):
-    from app.models.user import User
-    user_service = UserService(session, perm_service)
-    target = session.get(User, target_user_id)
-    if not target:
-        click.echo('Utilisateur introuvable')
-        return
-
-    update_fields = [
-        ('Prénom', 'user_first_name'),
-        ('Nom', 'user_last_name'),
-        ('Nom d\'utilisateur', 'username'),
-        ('Email', 'email'),
-        ('Téléphone', 'phone_number'),
-        ('Role', 'role_id'),
-        ('Mot de passe', 'password'),
-    ]
-    while True:
-        field_opts = [(label, field) for label, field in update_fields]
-        field_choice = prompt_select_option(field_opts, prompt='Choisir champ')
-        if field_choice is None:
-            break
-        label = next(lbl for lbl, fld in update_fields if fld == field_choice)
-        field = field_choice
-        if field == 'password':
-            new_val = click.prompt(f"{label} (laisser vide pour annuler)", hide_input=True, default='')
-            if not new_val:
-                click.echo('Annulé')
-                continue
-            upd = {'password': new_val}
-        else:
-            current_val = getattr(target, field) if field != 'role_id' else getattr(target.role, 'name', '')
-            if field == 'role_id':
-                # fetch roles from DB and propose selection (return id)
-                from app.models.role import Role
-                roles = session.query(Role).all()
-                role_opts = [(r.name, r.id) for r in roles]
-                new_val = prompt_select_option(role_opts, prompt='Choisir rôle')
-                if new_val is None:
-                    click.echo('Annulé')
-                    continue
-                upd = {'role_id': new_val}
-            else:
-                new_val = click.prompt(label, default=current_val if current_val is not None else '')
-                # preserve current value when prompt returns empty string
-                upd = {field: (new_val if new_val != '' else current_val)}
-        try:
-            with transactional(session):
-                user_service.update(current_user, target.id, **upd)
-            click.echo('Champ mis à jour')
-            target = session.get(User, target_user_id)
-        except Exception as e:
-            click.echo(f'Erreur mise à jour: {e}')
-
-
-def delete_user(current_user, session, perm_service, target_user_id):
-    from app.models.user import User
-    user_service = UserService(session, perm_service)
-    target = session.get(User, target_user_id)
-    if not target:
-        click.echo('Utilisateur introuvable')
-        return
-    try:
-        confirm = click.prompt('Confirmer suppression ? (o/n)', default='n')
-        if confirm.lower().startswith('o'):
-            with transactional(session):
-                user_service.delete(current_user, target.id)
-            click.echo('Utilisateur supprimé')
-    except Exception as e:
-        click.echo(f'Erreur suppression: {e}')
-
-
-def list_all_users(user, session, perm_service):
-    user_service = UserService(session, perm_service)
-    try:
-        users = user_service.list_all(user)
-        user_options = [(
-            f"{u.id}: {u.user_first_name} {u.user_last_name} ({u.username})",
-            u.id,
-        ) for u in users]
-        choice = prompt_list_or_empty(user_options, empty_message='Aucun utilisateur', prompt_text='Choisir utilisateur')
-        if choice is None:
-            return
-        display_detail_users(user, session, perm_service, choice)
-    except Exception as e:
-        click.echo(f'Erreur: {e}')
-
-
-def filter_user_by_id(user, session, perm_service):
-    user_service = UserService(session, perm_service)
-    try:
-        sel = click.prompt('Saisir l\'ID utilisateur (0=Retour)', type=int)
-        if sel == 0:
-            return
-        target = user_service.get_by_id(user, sel)
-        if not target:
-            click.echo('Utilisateur introuvable')
-            return
-        display_detail_users(user, session, perm_service, target.id)
-    except Exception as e:
-        click.echo(f'Erreur: {e}')
-
-
-
-def display_detail_users(current_user, session, perm_service, target_user_id):
-    from app.models.user import User
-    target = session.get(User, target_user_id)
-    if not target:
-        click.echo('Utilisateur introuvable')
-        return
-    click.echo(f"\nID: {target.id}\nPrénom: {target.user_first_name}\nNom: {target.user_last_name}\nUsername: {target.username}\nEmail: {target.email}\nTéléphone: {target.phone_number}\nRole: {getattr(target.role, 'name', target.role_id)}")
-    actions = []
-    if perm_service.user_has_permission(current_user, 'user:update') and current_user.role.name == 'management':
-        actions.append(('Modifier', 'update'))
-    if perm_service.user_has_permission(current_user, 'user:delete') and current_user.role.name == 'management':
-        actions.append(('Supprimer', 'delete'))
-    action = prompt_detail_actions(actions, prompt_text='Choix')
-    if action is None:
-        return
-    if action == 'update':
-        update_user(current_user, session, perm_service, target.id)
-    elif action == 'delete':
-        delete_user(current_user, session, perm_service, target.id)
