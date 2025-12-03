@@ -7,8 +7,8 @@ from app.db.transaction import transactional
 def get_contracts_menu_options(user, perm_service):
     """Return available (label, action) options for contracts menu (excludes return)."""
     options = []
-    if perm_service.can_read_contract(user):
-        if perm_service.can_create_contract(user):
+    if perm_service.user_has_permission(user, 'contract:read'):
+        if perm_service.user_has_permission(user, 'contract:create'):
             options.append(('Créer un contrat', 'create'))
         options.append(('Afficher tous les contrats', 'list_all'))
         options.append(('Mes contrats', 'mine'))
@@ -40,10 +40,7 @@ def main_contract_menu(user, session, perm_service):
 
 def create_contract(user, session, perm_service):
     contract_service = ContractService(session, perm_service)
-    # check permissions even if menu only shows option if allowed
-    if not perm_service.can_create_contract(user):
-        click.echo('Permission refusée')
-        return
+
     try:
         total_amount = click.prompt('Montant total')
         signed_input = click.prompt('Signé ? (o/n)', default='n')
@@ -69,9 +66,7 @@ def update_contract(user, session, perm_service, contract_id):
     if not contract:
         click.echo('Contrat introuvable')
         return
-    if not perm_service.can_update_contract(user, contract):
-        click.echo('Permission refusée')
-        return
+
     mod_fields = [
         ('Montant total', 'total_amount'),
         ('Balance due', 'balance_due'),
@@ -111,9 +106,6 @@ def delete_contract(user, session, perm_service, contract_id):
         click.echo('Contrat introuvable')
         return
     
-    if not perm_service.can_delete_contract(user, contract):
-        click.echo('Permission refusée')
-        return
     try:
         confirm = click.prompt('Confirmer suppression ? (o/n)', default='n')
         if confirm.lower().startswith('o'):
@@ -125,9 +117,6 @@ def delete_contract(user, session, perm_service, contract_id):
 
 def list_all_contracts(user, session, perm_service):
     contract_service = ContractService(session, perm_service)
-    if not perm_service.can_read_contract(user):
-        click.echo("Permission refusée")
-        return
     try:
         contracts = contract_service.list_all(user)
         contract_options = [(f"{c.id}: lié au client {c.customer.company_name}", c.id) for c in contracts]
@@ -141,9 +130,6 @@ def list_all_contracts(user, session, perm_service):
 
 def my_contracts(user, session, perm_service):
     contract_service = ContractService(session, perm_service)
-    if not perm_service.can_read_contract(user):
-        raise PermissionError("Utilisateur non autorisé à lire les contrats")
-
     try:
         # role/ownership logic handled in the view
         if user.role.name == 'management':
@@ -178,7 +164,7 @@ def my_unsigned_contracts(user, session, perm_service):
             contracts = [c for c in contract_service.list_by_management_user(user.id) if not c.signed]
         elif user.role.name == 'sales':
             customer_ids = [c.id for c in user.customers]
-            contracts = [c for c in contract_service.list_by_customer_ids(customer_ids) if not c.signed]
+            contracts = [c for c in contract_service.list_by_customer_ids(user, customer_ids) if not c.signed]
         else:
             contracts = []
         # Affichage similaire à `my_contracts`
@@ -206,7 +192,7 @@ def my_unpaid_contracts(user, session, perm_service):
             contracts = [c for c in contract_service.list_by_management_user(user.id) if c.balance_due > 0]
         elif user.role.name == 'sales':
             customer_ids = [c.id for c in user.customers]
-            contracts = [c for c in contract_service.list_by_customer_ids(customer_ids) if c.balance_due > 0]
+            contracts = [c for c in contract_service.list_by_customer_ids(user, customer_ids) if c.balance_due > 0]
         else:
             contracts = []
         # Affichage similaire à `my_contracts`
@@ -228,8 +214,7 @@ def my_unpaid_contracts(user, session, perm_service):
 
 
 def display_detail_contracts(user, session, perm_service, contract_id):
-    if not perm_service.can_read_contract(user):
-            raise PermissionError("Utilisateur non autorisé à lire les contrats")
+
     from app.models.contract import Contract
     contract = session.get(Contract, contract_id)
     if not contract:
@@ -239,10 +224,12 @@ def display_detail_contracts(user, session, perm_service, contract_id):
     actions = []
 
     # vérification de permissions pour affichage des actions possibles
-    if perm_service.can_update_contract(user, contract):
-        actions.append(('Modifier', 'update'))
+    if perm_service.user_has_permission(user, 'contract:update'):
+        sales_role = getattr(user, 'role', None) and getattr(user.role, 'name', None) == 'sales'
+        if not sales_role or contract.customer_id in {c.id for c in getattr(user, 'customers', [])}:
+            actions.append(('Modifier', 'update'))
 
-    if perm_service.can_delete_contract(user, contract):
+    if perm_service.user_has_permission(user, 'contract:delete'):
         actions.append(('Supprimer', 'delete'))
 
     action = prompt_detail_actions(actions, prompt_text='Choix')

@@ -40,16 +40,16 @@ def run_interface():
             perm_service = PermissionService(session)
 
             while True:
-                services = perm_service.available_services_for_user(user)
+                services = perm_service.available_menus_for_user(user)
                 click.echo('\nMenu principal :')
                 options = []
-                if 'manage_users' in services:
+                if 'display_menu_users' in services:
                     options.append(('Gestion des utilisateurs', main_user_menu))
-                if 'manage_customers' in services:
+                if 'display_menu_customers' in services:
                     options.append(('Gestion des clients', main_customer_menu))
-                if 'manage_contracts' in services:
+                if 'display_menu_contracts' in services:
                     options.append(('Gestion des contrats', main_contract_menu))
-                if 'manage_events' in services:
+                if 'display_menu_events' in services:
                     options.append(('Gestion des évènements', main_event_menu))
 
                 click.echo('0. Déconnexion')

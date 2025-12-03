@@ -30,23 +30,16 @@ def main_user_menu(user, session, perm_service):
 
 
 def create_user(user, session, perm_service):
+    # initialise le service utilisateur
     user_service = UserService(session, perm_service)
-    # commence par vérifier les permissions, même si en théorie le menu ne propose cette action
-    # que si l'utilisateur a la permission
-    if not perm_service.user_has_permission(user, 'user:create') or user.role.name != 'management':
-        click.echo("Permission refusée: création impossible")
-        return
+
     try:
-        click.echo('Règles de saisie :')
-        click.echo("- Prénom/Nom : max 100 caractères. Autorisés : lettres, espaces, apostrophes, tirets")
-        click.echo("- Nom d'utilisateur : max 100 caractères. Autorisés : lettres et chiffres seulement")
-        click.echo("- Email : format email, max 255 caractères")
-        click.echo("- Téléphone : max 20 caractères. Autorisés : chiffres et un préfixe + optionnel")
         first = click.prompt('Prénom')
         last = click.prompt('Nom')
         username = click.prompt('Nom d\'utilisateur')
         email = click.prompt('Email')
         phone = click.prompt('Téléphone')
+
         # sélection du rôle parmi ceux en base et pas en dur
         from app.models.role import Role
         roles = session.query(Role).all()
@@ -58,6 +51,7 @@ def create_user(user, session, perm_service):
         if role_id is None:
             click.echo('Annulé')
             return
+        
         # mot de passe avec saisie masquée
         password = click.prompt('Mot de passe', hide_input=True)
         fields = {
@@ -82,9 +76,7 @@ def update_user(current_user, session, perm_service, target_user_id):
     if not target:
         click.echo('Utilisateur introuvable')
         return
-    if not perm_service.user_has_permission(current_user, 'user:update'):
-        click.echo('Permission refusée')
-        return
+
     update_fields = [
         ('Prénom', 'user_first_name'),
         ('Nom', 'user_last_name'),
@@ -138,9 +130,6 @@ def delete_user(current_user, session, perm_service, target_user_id):
     target = session.get(User, target_user_id)
     if not target:
         click.echo('Utilisateur introuvable')
-        return
-    if not perm_service.user_has_permission(current_user, 'user:delete'):
-        click.echo('Permission refusée')
         return
     try:
         confirm = click.prompt('Confirmer suppression ? (o/n)', default='n')

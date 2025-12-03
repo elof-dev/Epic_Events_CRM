@@ -22,7 +22,7 @@ class ContractService:
         self.perm = permission_service
 
     def create(self, user, **fields):
-        if not self.perm.can_create_contract(user):
+        if not self.perm.user_has_permission(user, 'contract:create'):
             raise PermissionError("Permission refusée")
         # injection si l'appelant est du rôle 'management'
         if not fields.get('user_management_id'):
@@ -69,11 +69,12 @@ class ContractService:
     def update(self, user, contract_id: int, **fields):
         contract = self.repo.get_by_id(contract_id)
         
-        if not self.perm.can_update_contract(user, contract):
+        if not self.perm.user_has_permission(user, 'contract:update'):
             raise PermissionError("Permission refusée")
         if not contract:
             raise ValueError("Contrat non trouvé")
-        
+        self._ensure_sales_contract_owner(contract, user)
+
         try:
             validated = ContractUpdate(**fields).model_dump(exclude_none=True)
         except ValidationError as exc:
@@ -96,7 +97,7 @@ class ContractService:
     def delete(self, user, contract_id: int):
         contract = self.repo.get_by_id(contract_id)
 
-        if not self.perm.can_delete_contract(user, contract):
+        if not self.perm.user_has_permission(user, 'contract:delete'):
             raise PermissionError("Permission refusée")
         if not contract:
             raise ValueError("Contrat non trouvé")
@@ -115,18 +116,18 @@ class ContractService:
             raise
 
     def list_all(self, user):
-        if not self.perm.can_read_contract(user):
+        if not self.perm.user_has_permission(user, 'contract:read'):
             raise PermissionError("Utilisateur non autorisé à lire les contrats")
         return self.repo.list_all()
 
 
     def list_by_management_user(self, user, user_id: int):
-        if not self.perm.can_read_contract(user):
+        if not self.perm.user_has_permission(user, 'contract:read'):
             raise PermissionError("Utilisateur non autorisé à lire les contrats")
         return self.repo.list_by_management_user(user_id)
 
     def list_by_customer_ids(self, user, customer_ids: list):
-        if not self.perm.can_read_contract(user):
+        if not self.perm.user_has_permission(user, 'contract:read'):
             raise PermissionError("Utilisateur non autorisé à lire les contrats")
         return self.repo.list_by_customer_ids(customer_ids)
 
@@ -134,6 +135,12 @@ class ContractService:
     def _normalize(self, validated: dict) -> dict:
         # currently no string fields to strip, but keep hook for future
         return validated
+
+    def _ensure_sales_contract_owner(self, contract, user) -> None:
+        if getattr(user, 'role', None) and getattr(user.role, 'name', None) == 'sales':
+            customer_ids = {c.id for c in getattr(user, 'customers', [])}
+            if contract.customer_id not in customer_ids:
+                raise PermissionError("Action réservée au commercial propriétaire")
 
     def _ensure_management_user_exists(self, user_id: Optional[int]) -> None:
         if not user_id:

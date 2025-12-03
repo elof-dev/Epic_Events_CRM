@@ -12,7 +12,7 @@ class PermissionService(Permission):
     - `user_has_permission(user, permission_name) -> bool` : indique si l'utilisateur
         possède la permission passée en paramètre (vérification via son rôle).
     - `available_services_for_user(user) -> List[str]` : liste des sections
-        applicatives accessibles par l'utilisateur (ex. `manage_users`).
+        applicatives accessibles par l'utilisateur (ex. `display_menu_users`).
     - Méthodes utilitaires nommées `can_create_*`, `can_update_*`, `can_delete_*`
         qui retournent un booléen indiquant si l'utilisateur a la permission CRUD
         correspondante. 
@@ -27,8 +27,8 @@ class PermissionService(Permission):
         Par exemple, "customer:create", "contract:read", etc.
         Retourne True si l'utilisateur a la permission, False sinon.
         """
-        for p in user.role.permissions:
-            if p.name == permission_name:
+        for permission in user.role.permissions:
+            if permission.name == permission_name:
                 return True
         return False
 
@@ -38,7 +38,7 @@ class PermissionService(Permission):
         """
         return user is not None and getattr(user, 'id', None) is not None
 
-    def available_services_for_user(self, user) -> List[str]:
+    def available_menus_for_user(self, user) -> List[str]:
         """
         Fonction appelée uniquement pour afficher les grandes sections
         des menus (CLI/views) selon les permissions de l'utilisateur.
@@ -46,16 +46,16 @@ class PermissionService(Permission):
         "user:read", seul ce rôle verra la section de gestion des utilisateurs.
         Il s'agit ici de faire un premeir filtrage global des sections
         """
-        services = []
+        menus = []
         if self.user_has_permission(user, "user:read"):
-            services.append("manage_users")
+            menus.append("display_menu_users")
         if self.user_has_permission(user, "customer:read"):
-            services.append("manage_customers")
+            menus.append("display_menu_customers")
         if self.user_has_permission(user, "contract:read"):
-            services.append("manage_contracts")
+            menus.append("display_menu_contracts")
         if self.user_has_permission(user, "event:read"):
-            services.append("manage_events")
-        return services
+            menus.append("display_menu_events")
+        return menus
 
 # ------PERMISSIONS POUR LES CLIENTS
     

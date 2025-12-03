@@ -40,10 +40,7 @@ def main_event_menu(user, session, perm_service):
 
 def create_event(user, session, perm_service):
     event_service = EventService(session, perm_service)
-    # check des permissions même si le menu n'affiche cette action que si autorisée
-    if not perm_service.user_has_permission(user, 'event:create'):
-        click.echo('Permission refusée')
-        return
+
     try:
         contract_id = click.prompt('ID du contrat lié')
         customer_id = click.prompt('ID du client lié')
@@ -147,27 +144,26 @@ def events_without_support(user, session, perm_service):
         click.echo(f'Erreur: {e}')
 
 
-def display_list_events(events):
-    click.echo('\nEvènements:')
-    for e in events:
-        print_event(e)
-
 
 def display_detail_events(current_user, session, perm_service, event_id):
     from app.models.event import Event
-    event_service = EventService(session, perm_service)
+
     event = session.get(Event, event_id)
     if not event:
         click.echo('Evènement introuvable')
         return
-    click.echo(f"\nID: {event.id}\nNom: {event.event_name}\nNuméro: {event.event_id}\nContract: {event.contract_id}\nClient: {event.customer_id}\nDébut: {event.start_datetime}\nFin: {event.end_datetime}\nLieu: {event.location}\nParticipants: {event.attendees}\nSupport: {event.user_support_id}")
-    can_update = perm_service.user_has_permission(current_user, 'event:update')
-    can_delete = perm_service.user_has_permission(current_user, 'event:delete')
+    click.echo(f"\nID: {event.id}\nNom: {event.event_name}\nContract: {event.contract_id}\nClient: {event.customer_id}\nDébut: {event.start_datetime}\nFin: {event.end_datetime}\nLieu: {event.location}\nParticipants: {event.attendees}\nSupport: {event.user_support_id}")
+    
+    # Vérification pour affichage des actions possibles
     actions = []
-    if can_update:
-        actions.append(('Modifier', 'update'))
-    if can_delete:
+    if perm_service.user_has_permission(current_user, 'event:update'):
+        support_role = getattr(current_user, 'role', None) and getattr(current_user.role, 'name', None) == 'support'
+        if not support_role or getattr(event, 'user_support_id', None) == getattr(current_user, 'id', None):
+            actions.append(('Modifier', 'update'))
+
+    if perm_service.user_has_permission(current_user, 'event:delete'):
         actions.append(('Supprimer', 'delete'))
+
     action = prompt_detail_actions(actions, prompt_text='Choix')
     if action is None:
         return
@@ -184,15 +180,15 @@ def update_event(current_user, session, perm_service, event_id):
     if not event:
         click.echo('Evènement introuvable')
         return
-    if not perm_service.user_has_permission(current_user, 'event:update'):
-        click.echo('Permission refusée: mise à jour impossible')
-        return
+
     # management can only update support assignment (enforced at view level)
     if current_user.role.name == 'management':
         new_support = click.prompt('ID nouveau support (laisser vide pour annuler)', default='')
         if not new_support:
             click.echo('Annulé')
             return
+    
+
         try:
             with transactional(session):
                 event_service.update(current_user, event.id, user_support_id=int(new_support))
@@ -200,6 +196,7 @@ def update_event(current_user, session, perm_service, event_id):
         except Exception as e:
             click.echo(f'Erreur mise à jour: {e}')
         return
+
 
     mod_fields = [
         ('Client', 'customer_id'),
@@ -209,7 +206,7 @@ def update_event(current_user, session, perm_service, event_id):
         ('Fin (YYYY-MM-DD HH:MM)', 'end_datetime'),
         ('Lieu', 'location'),
         ('Participants', 'attendees'),
-        ('ID support', 'user_support_id'),
+
     ]
     while True:
         field_opts = [(label, field) for label, field in mod_fields]
@@ -244,9 +241,7 @@ def delete_event(current_user, session, perm_service, event_id):
     if not event:
         click.echo('Evènement introuvable')
         return
-    if not perm_service.user_has_permission(current_user, 'event:delete'):
-        click.echo('Permission refusée: suppression impossible')
-        return
+
     try:
         confirm = click.prompt('Confirmer suppression ? (o/n)', default='n')
         if confirm.lower().startswith('o'):
@@ -256,6 +251,3 @@ def delete_event(current_user, session, perm_service, event_id):
     except Exception as e:
         click.echo(f'Erreur suppression: {e}')
 
-
-def print_event(e):
-    click.echo(f"{e.id}: {e.event_name} - {e.event_id} client={e.customer_id} support={e.user_support_id}")

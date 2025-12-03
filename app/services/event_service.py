@@ -62,9 +62,6 @@ class EventService:
         # les commerciaux ne peuvent créer des événements que pour leurs propres clients
         self._ensure_customer_belongs_to_sales_user(validated.get("customer_id"), user)
 
-        if not self.perm.can_create_event(user, contract):
-            raise PermissionError("Permission refusée")
-
         try:
             return self.repo.create(**validated)
         except IntegrityError as exc:

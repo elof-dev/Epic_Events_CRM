@@ -1,7 +1,4 @@
 import click
-from app.db.session import create_engine_and_session
-from app.repositories.user_repository import UserRepository
-from app.services.auth_service import AuthService
 from cli.crm_interface import run_interface
 from app.db import init_db as init_db_module
 

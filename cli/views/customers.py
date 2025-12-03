@@ -6,11 +6,11 @@ from app.db.transaction import transactional
 
 def get_customer_menu_options(user, perm_service):
     options = []
-    if perm_service.can_read_customer(user):
+    if perm_service.user_has_permission(user, 'customer:read'):
         options.append(('Afficher tous les clients', 'list_all'))
         if getattr(user, 'role', None) is not None and user.role.name == 'sales':
             options.append(('Mes clients', 'mine'))
-    if perm_service.can_create_customer(user):
+    if perm_service.user_has_permission(user, 'customer:create'):
         options.append(('Créer un client', 'create'))
     return options
 
@@ -32,10 +32,7 @@ def main_customer_menu(user, session, perm_service):
 
 def create_customer(user, session, perm_service):
     cust_service = CustomerService(session, perm_service)
-    # check permissions even if menu only shows option if allowed
-    if not perm_service.can_create_customer(user):
-        click.echo("Permission refusée")
-        return
+
     try:
         first = click.prompt('Prénom')
         last = click.prompt('Nom')
@@ -63,9 +60,7 @@ def update_customer(user, session, perm_service, customer_id):
     if not customer:
         click.echo('Client introuvable')
         return
-    if not perm_service.can_update_customer(user, customer):
-        click.echo('Permission refusée')
-        return
+
     mod_fields = [
         ('Prénom', 'customer_first_name'),
         ('Nom', 'customer_last_name'),
@@ -100,9 +95,7 @@ def delete_customer(user, session, perm_service, customer_id):
     if not customer:
         click.echo('Client introuvable')
         return
-    if not perm_service.can_delete_customer(user, customer):
-        click.echo('Permission refusée')
-        return
+
     try:
         confirm = click.prompt('Confirmer suppression ? (o/n)', default='n')
         if confirm.lower().startswith('o'):
@@ -115,9 +108,6 @@ def delete_customer(user, session, perm_service, customer_id):
 
 def list_all_customers(user, session, perm_service):
     cust_service = CustomerService(session, perm_service)
-    if not perm_service.can_read_customer(user):
-        click.echo("Permission refusée")
-        return
     try:
         customers = cust_service.list_all(user)
         customer_options = [(f"{c.id}: {c.customer_first_name} {c.customer_last_name}", c.id) for c in customers]
@@ -131,9 +121,6 @@ def list_all_customers(user, session, perm_service):
 
 def my_customers(user, session, perm_service):
     cust_service = CustomerService(session, perm_service)
-    if not perm_service.can_read_customer(user):
-        click.echo("Permission refusée")
-        return
     try:
         customers = cust_service.list_mine(user)
         click.echo('\nListe de mes clients:')
@@ -149,19 +136,18 @@ def my_customers(user, session, perm_service):
 def display_detail_customers(user, session, perm_service, customer_id):
     from app.models.customer import Customer
     cust_service = CustomerService(session, perm_service)
-    if not perm_service.can_read_customer(user):
-        click.echo("Permission refusée")
-        return
     customer = session.get(Customer, customer_id)
     if not customer:
         click.echo('Client introuvable')
         return
     click.echo(f"\nID: {customer.id}\nNom: {customer.customer_first_name} {customer.customer_last_name}\nEntreprise: {customer.company_name}\nEmail: {customer.email}\nSales id: {customer.user_sales_id}")
     actions = []
+
     # Vérification pour affichage des actions possibles
-    if perm_service.can_update_customer(user, customer):
+    is_customer_owner = getattr(customer, 'user_sales_id', None) == getattr(user, 'id', None)
+    if perm_service.user_has_permission(user, 'customer:update') and is_customer_owner:
         actions.append(('Modifier', 'update'))
-    if perm_service.can_delete_customer(user, customer):
+    if perm_service.user_has_permission(user, 'customer:delete') and is_customer_owner:
         actions.append(('Supprimer', 'delete'))
 
     action = prompt_detail_actions(actions, prompt_text='Choix')

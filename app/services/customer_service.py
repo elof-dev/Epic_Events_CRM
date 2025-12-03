@@ -36,11 +36,9 @@ class CustomerService:
         self.perm = permission_service
 
     def create(self, user, **fields):
-        if not self.perm.can_create_customer(user):
+        if not self.perm.user_has_permission(user, 'customer:create'):
             raise PermissionError("Permission refuseée")
-        # creation logic: le service peut assigner par défaut le sales caller
-        # comme propriétaire si none fourni; les règles d'autorisation sont
-        # également appliquées par `perm`.
+
         try:
             validated = CustomerCreate(**fields).model_dump()
         except ValidationError as exc:
@@ -66,9 +64,10 @@ class CustomerService:
         if not customer:
             raise ValueError("Client non trouvé")
 
-        # Vérification d'autorisation centralisée
-        if not self.perm.can_update_customer(user, customer):
+        # Vérification d'autorisation 
+        if not self.perm.user_has_permission(user, 'customer:update'):
             raise PermissionError("Permission refusée")
+        self._ensure_customer_owner(customer, user)
         try:
             validated = CustomerUpdate(**fields).model_dump(exclude_none=True)
         except ValidationError as exc:
@@ -91,9 +90,10 @@ class CustomerService:
         customer = self.repo.get_by_id(customer_id)
         if not customer:
             raise ValueError("Client non trouvé")
-        # Vérification d'autorisation centralisée
-        if not self.perm.can_delete_customer(user, customer):
+        # Vérification d'autorisation
+        if not self.perm.user_has_permission(user, 'customer:delete'):
             raise PermissionError("Permission refusée")
+        self._ensure_customer_owner(customer, user)
 
         # refuse deletion if customer has contracts or events
         from app.models.contract import Contract
@@ -110,6 +110,7 @@ class CustomerService:
                 parts.append(f"{events_count} évènement(s)")
             raise ValueError("Impossible de supprimer le client : il est référencé par " + ", ".join(parts) + ".")
 
+        # essayez de supprimer et gérez les erreurs potentielles
         try:
             self.repo.delete(customer)
         except Exception:
@@ -135,6 +136,10 @@ class CustomerService:
         if 'email' in validated and isinstance(validated.get('email'), str):
             validated['email'] = validated['email'].lower()
         return validated
+
+    def _ensure_customer_owner(self, customer, user) -> None:  
+        if getattr(customer, 'user_sales_id', None) != getattr(user, 'id', None):
+            raise PermissionError("Action réservée au commercial propriétaire")
 
     def _ensure_sales_user_exists(self, user_id: Optional[int]) -> None:
         if not user_id:
