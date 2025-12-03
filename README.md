@@ -3,7 +3,8 @@
 Application CRM CLI pour gérer des clients, contrats et événements. 
 L'application est conçue pour être utilisée en ligne de commande (CLI) et intègre une gestion des utilisateurs avec rôles et permissions.
 
-## Principales briques
+## Principales fonctionnalités
+
 - **Interface CLI** : `cli.main` lance une réinitialisation complète de la base puis un menu principal piloté par les permissions (`PermissionService`) affichant les vues clients/contrats/évènements et la gestion des utilisateurs.
 - **Domaines SQLAlchemy** : modèles `User`, `Role`, `Permission`, `Customer`, `Contract`, `Event` versionnés avec un mixin de timestamps. Les repositories exposent les opérations CRUD et restent agnostiques sur la logique métier.
 - **Services applicatifs** : `CustomerService`, `ContractService`, `EventService`, `AuthService`, `PermissionService` orchestrent la validation (Pydantic), la vérification d'appartenance et les règles de gestion avant d'appeler les repositories.
@@ -14,13 +15,14 @@ L'application est conçue pour être utilisée en ligne de commande (CLI) et int
 - Python 3.13
 - SQLAlchemy + PyMySQL pour MySQL
 - Click pour la CLI
-- Pydantic pour valider les payloads (schemas)
-- Argon2, PyJWT pour auth
-- Sentry SDK (initialisé dans `cli.sentry`) pour capturer les erreurs
+- Pydantic (schemas) pour la validation des données
+- Argon2 pour le hachage des mots de passe
+- PyJWT pour la gestion des tokens JWT
+- Sentry SDK pour capturer les erreurs
 - Tests unitaires avec pytest (+ pytest-cov)
 
 ## Installation & configuration
-1. Cloner le dépôt : `git clone https://github.com/votre-utilisateur/epic_events_crm.git`
+1. Cloner le dépôt 
 
 2. Installer les dépendances : `poetry install`
 
@@ -56,13 +58,13 @@ Pour cela, vous pouvez utiliser un client MySQL ou la ligne de commande :
 	Chaque rôle verra les sections du menu qui correspondent à ses permissions (`PermissionService.available_menus_for_user`).
 
 ## Base de données & seed
-- L'initialisation crée les tables SQLAlchemy, les rôles/permissions, trois sales, deux managers, deux supports, quelques clients, contrats et événements liés.
+- L'initialisation crée les tables SQLAlchemy, les rôles/permissions, trois sales, deux managers, deux supports, des clients, contrats et événements liés.
 - Les seeds détaillés se trouvent dans `app.db.init_db.seed`, notamment la distribution des contrats/événements par utilisateur.
 - La base de données est recréée à chaque lancement de l'application afin de garantir un état propre pour les tests et le développement.
 
 ## Testing
 - Lancer la suite : `poetry run pytest`
-- Le dossier `tests/units` couvre les repositories, services et views pour s'assurer que les règles métiers fonctionnent.
+
 
 ## Structure utile
 - `app/models` : définitions SQLAlchemy + mixins
@@ -71,8 +73,3 @@ Pour cela, vous pouvez utiliser un client MySQL ou la ligne de commande :
 - `cli/views` : menus spécifiques (users/customers/contracts/events)
 - `cli/crm_interface.py` : orchestration de l'interface (login, boucle de menu)
 - `tests/units` : scénarios unitaires indépendants de la base réelle
-
-## Prochaines étapes suggérées
-1. Supprimer le `RuntimeError` pour explorer le CLI sans interruption.
-2. Ajouter des fixtures fixtures/tests d'intégration (ex. avec la base MySQL).
-3. Exporter un script SQL ou utiliser Docker pour rendre l'environnement MySQL plus reproductible.
