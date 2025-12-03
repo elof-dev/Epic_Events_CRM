@@ -5,8 +5,8 @@ L'application est conçue pour être utilisée en ligne de commande (CLI) et int
 
 ## Principales fonctionnalités
 
-- **Interface CLI** : `cli.main` lance une réinitialisation complète de la base puis un menu principal piloté par les permissions (`PermissionService`) affichant les vues clients/contrats/évènements et la gestion des utilisateurs.
-- **Domaines SQLAlchemy** : modèles `User`, `Role`, `Permission`, `Customer`, `Contract`, `Event` versionnés avec un mixin de timestamps. Les repositories exposent les opérations CRUD et restent agnostiques sur la logique métier.
+- **Interface CLI** : `cli.main` lance une réinitialisation complète de la base puis le menu principal
+- **Domaines SQLAlchemy** : modèles `User`, `Role`, `Permission`, `Customer`, `Contract`, `Event`
 - **Services applicatifs** : `CustomerService`, `ContractService`, `EventService`, `AuthService`, `PermissionService` orchestrent la validation (Pydantic), la vérification d'appartenance et les règles de gestion avant d'appeler les repositories.
 - **Authentification & tokens** : `AuthService` sait créer/verifier des JWT (Argon2 + PyJWT) et sécuriser les mots de passe.
 - **Base de données** : initialisation via `app.db.init_db` avec un seeding complet (rôles, permissions, utilisateurs, contrats, événements) et via la commande CLI qui droppe/crée/seed la base à chaque lancement.
@@ -65,11 +65,3 @@ Pour cela, vous pouvez utiliser un client MySQL ou la ligne de commande :
 ## Testing
 - Lancer la suite : `poetry run pytest`
 
-
-## Structure utile
-- `app/models` : définitions SQLAlchemy + mixins
-- `app/repositories` : accès DB CRUD
-- `app/services` : logique métier & validations
-- `cli/views` : menus spécifiques (users/customers/contracts/events)
-- `cli/crm_interface.py` : orchestration de l'interface (login, boucle de menu)
-- `tests/units` : scénarios unitaires indépendants de la base réelle
