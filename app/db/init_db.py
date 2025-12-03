@@ -11,7 +11,7 @@ from app.models.event import Event
 from app.services.auth_service import AuthService
 from decimal import Decimal
 import datetime
-from app.config import DB_HOST, DB_PORT, DB_USER, DB_PASS, DB_NAME
+from app.db.config import DB_HOST, DB_PORT, DB_USER, DB_PASS, DB_NAME
 
 
 def drop_create_database():

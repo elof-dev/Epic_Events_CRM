@@ -1,7 +1,7 @@
 from argon2 import PasswordHasher
 import jwt
 import datetime
-from app.config import JWT_SECRET, JWT_ALGORITHM, JWT_EXP_SECONDS
+from app.db.config import JWT_SECRET, JWT_ALGORITHM, JWT_EXP_SECONDS
 
 
 class AuthService:

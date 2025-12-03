@@ -1,6 +1,6 @@
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
-from app.config import DB_USER, DB_PASS, DB_HOST, DB_PORT, DB_NAME
+from app.db.config import DB_USER, DB_PASS, DB_HOST, DB_PORT, DB_NAME
 
 def get_database_url(db_name=None):
     
