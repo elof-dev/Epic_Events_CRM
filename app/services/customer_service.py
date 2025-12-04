@@ -3,6 +3,7 @@ from pydantic import ValidationError
 from app.schemas.customer import CustomerCreate, CustomerUpdate
 from sqlalchemy.exc import IntegrityError
 from typing import Optional
+from app.models.customer import Customer
 
 
 
@@ -30,12 +31,12 @@ class CustomerService:
         opérations sensibles.
     """
 
-    def __init__(self, session, permission_service):
+    def __init__(self, session, permission_service) -> None:
         self.session = session
         self.repo = CustomerRepository(session)
         self.perm = permission_service
 
-    def create(self, user, **fields):
+    def create(self, user, **fields) -> Customer:
         if not self.perm.user_has_permission(user, 'customer:create'):
             raise PermissionError("Permission refuseée")
 
@@ -59,7 +60,7 @@ class CustomerService:
             self.session.rollback()
             raise ValueError('Violation de contrainte en base (doublon possible)') from exc
 
-    def update(self, user, customer_id: int, **fields):
+    def update(self, user, customer_id: int, **fields) -> Customer:
         customer = self.repo.get_by_id(customer_id)
         if not customer:
             raise ValueError("Client non trouvé")
@@ -86,7 +87,7 @@ class CustomerService:
             self.session.rollback()
             raise ValueError('Violation de contrainte en base (doublon possible)') from exc
 
-    def delete(self, user, customer_id: int):
+    def delete(self, user, customer_id: int) -> None:
         customer = self.repo.get_by_id(customer_id)
         if not customer:
             raise ValueError("Client non trouvé")
@@ -117,13 +118,13 @@ class CustomerService:
             self.session.rollback()
             raise
 
-    def list_all(self, user):
+    def list_all(self, user) -> list[Customer]:
         # visibility handled at CLI/service level; here return all if allowed
         if not self.perm.user_has_permission(user, 'customer:read'):
             raise PermissionError("Permission refuseée")
         return self.repo.list_all()
 
-    def list_mine(self, user):
+    def list_mine(self, user) -> list[Customer]:
         if not self.perm.user_has_permission(user, 'customer:read'):
             raise PermissionError("Permission refuseée")
         return self.repo.list_by_sales_user(user.id)

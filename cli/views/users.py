@@ -1,32 +1,26 @@
 from app.services.user_service import UserService
 import click
-from cli.helpers import prompt_select_option, prompt_list_or_empty, prompt_detail_actions
+from cli.helpers import prompt_menu
 from app.db.transaction import transactional
 
 
 class UsersView:
-    def __init__(self, session, perm_service):
+    """
+    Vue CLI pour la gestion des utilisateurs.
+    Permet aux utilisateurs de créer, lire, mettre à jour et supprimer des utilisateurs
+    en fonction de leurs permissions.
+    """
+    def __init__(self, session, perm_service) -> None:
         self.session = session
         self.perm_service = perm_service
-        self.prompt_select_option = prompt_select_option
-        self.prompt_list_or_empty = prompt_list_or_empty
-        self.prompt_detail_actions = prompt_detail_actions
+        self.prompt_menu = prompt_menu
         self.click = click
 
-    def get_user_menu_options(self, user):
-        options = []
-        if self.perm_service.user_has_permission(user, 'user:read'):
-            options.append(('Afficher tous les utilisateurs', 'list_all'))
-            options.append(('Filtrer par ID', 'filter_id'))
-        if self.perm_service.user_has_permission(user, 'user:create'):
-            options.append(('Créer un utilisateur', 'create'))
-        return options
-
-    def main_user_menu(self, user):
-        self.click.echo('\n=== Gestion des utilisateurs ===')
+    def main_user_menu(self, user) -> None:
         while True:
+            self.click.echo('\n=== Gestion des utilisateurs ===')
             options = self.get_user_menu_options(user)
-            action = self.prompt_select_option(options, prompt='Choix')
+            action = self.prompt_menu(options, prompt='Choix')
             if action is None:
                 return
             if action == 'list_all':
@@ -36,7 +30,19 @@ class UsersView:
             elif action == 'create':
                 self.create_user(user)
 
-    def create_user(self, user):
+    def get_user_menu_options(self, user) -> list:
+        
+        options = []
+        if self.perm_service.user_has_permission(user, 'user:read'):
+            options.append(('Afficher tous les utilisateurs', 'list_all'))
+            options.append(('Filtrer par ID', 'filter_id'))
+        if self.perm_service.user_has_permission(user, 'user:create'):
+            options.append(('Créer un utilisateur', 'create'))
+        return options
+
+
+
+    def create_user(self, user) -> None:
         user_service = UserService(self.session, self.perm_service)
         try:
             first = self.click.prompt('Prénom')
@@ -51,7 +57,7 @@ class UsersView:
                 self.click.echo('Aucun rôle disponible en base, annulation')
                 return
             role_options = [(r.name, r.id) for r in roles]
-            role_id = self.prompt_select_option(role_options, prompt='Choisir rôle')
+            role_id = self.prompt_menu(role_options, prompt='Choisir rôle')
             if role_id is None:
                 self.click.echo('Annulé')
                 return
@@ -72,7 +78,7 @@ class UsersView:
         except Exception as e:
             self.click.echo(f'Erreur création: {e}')
 
-    def update_user(self, current_user, target_user_id):
+    def update_user(self, current_user, target_user_id) -> None:
         from app.models.user import User
         user_service = UserService(self.session, self.perm_service)
         target = self.session.get(User, target_user_id)
@@ -91,7 +97,7 @@ class UsersView:
         ]
         while True:
             field_opts = [(label, field) for label, field in update_fields]
-            field_choice = self.prompt_select_option(field_opts, prompt='Choisir champ')
+            field_choice = self.prompt_menu(field_opts, prompt='Choisir champ')
             if field_choice is None:
                 break
             label = next(lbl for lbl, fld in update_fields if fld == field_choice)
@@ -108,7 +114,7 @@ class UsersView:
                     from app.models.role import Role
                     roles = self.session.query(Role).all()
                     role_opts = [(r.name, r.id) for r in roles]
-                    new_val = self.prompt_select_option(role_opts, prompt='Choisir rôle')
+                    new_val = self.prompt_menu(role_opts, prompt='Choisir rôle')
                     if new_val is None:
                         self.click.echo('Annulé')
                         continue
@@ -124,7 +130,7 @@ class UsersView:
             except Exception as e:
                 self.click.echo(f'Erreur mise à jour: {e}')
 
-    def delete_user(self, current_user, target_user_id):
+    def delete_user(self, current_user, target_user_id) -> None:
         from app.models.user import User
         user_service = UserService(self.session, self.perm_service)
         target = self.session.get(User, target_user_id)
@@ -140,7 +146,7 @@ class UsersView:
         except Exception as e:
             self.click.echo(f'Erreur suppression: {e}')
 
-    def list_all_users(self, user):
+    def list_all_users(self, user) -> None:
         user_service = UserService(self.session, self.perm_service)
         try:
             users = user_service.list_all(user)
@@ -148,14 +154,14 @@ class UsersView:
                 f"{u.id}: {u.user_first_name} {u.user_last_name} ({u.username})",
                 u.id,
             ) for u in users]
-            choice = self.prompt_list_or_empty(user_options, empty_message='Aucun utilisateur', prompt_text='Choisir utilisateur')
+            choice = self.prompt_menu(user_options, empty_message='Aucun utilisateur')
             if choice is None:
                 return
             self.display_detail_users(user, choice)
         except Exception as e:
             self.click.echo(f'Erreur: {e}')
 
-    def filter_user_by_id(self, user):
+    def filter_user_by_id(self, user) -> None:
         user_service = UserService(self.session, self.perm_service)
         try:
             sel = self.click.prompt('Saisir l\'ID utilisateur (0=Retour)', type=int)
@@ -169,7 +175,7 @@ class UsersView:
         except Exception as e:
             self.click.echo(f'Erreur: {e}')
 
-    def display_detail_users(self, current_user, target_user_id):
+    def display_detail_users(self, current_user, target_user_id) -> None:
         from app.models.user import User
         target = self.session.get(User, target_user_id)
         if not target:
@@ -181,7 +187,7 @@ class UsersView:
             actions.append(('Modifier', 'update'))
         if self.perm_service.user_has_permission(current_user, 'user:delete') and current_user.role.name == 'management':
             actions.append(('Supprimer', 'delete'))
-        action = self.prompt_detail_actions(actions, prompt_text='Choix')
+        action = self.prompt_menu(actions, prompt='Choix')
         if action is None:
             return
         if action == 'update':

@@ -12,16 +12,18 @@ class UserService:
     """Service de gestion des utilisateurs.
 
    Logique métier :
-   - création : 
+   - validation des données, vérification des permissions,
+   vérification de l'existence du rôle, vérification d'unicité,
+    hachage du mot de passe.
     """
 
-    def __init__(self, session, permission_service):
+    def __init__(self, session, permission_service) -> None:
         self.session = session
         self.repo = UserRepository(session)
         self.perm = permission_service
         self.auth = AuthService()
 
-    def create(self, current_user, **fields):
+    def create(self, current_user, **fields) -> User:
         # check permissions
         if not self.perm.user_has_permission(current_user, 'user:create'):
             raise PermissionError('Permission refuseée')
@@ -45,7 +47,7 @@ class UserService:
             self.session.rollback()
             raise ValueError('Violation de contrainte en base (doublon possible)') from exc
 
-    def update(self, current_user, user_id: int, **fields):
+    def update(self, current_user, user_id: int, **fields) -> User:
         if not self.perm.user_has_permission(current_user, 'user:update'):
             raise PermissionError('Permission refusée')
         u = self.repo.get_by_id(user_id)
@@ -102,11 +104,12 @@ class UserService:
             other = self.session.query(UserModel).filter(UserModel.phone_number == validated.get('phone_number')).one_or_none()
             if other and (exclude_user_id is None or other.id != exclude_user_id):
                 raise ValueError('Numéro de téléphone déjà utilisé')
+            
     def _hash_password_if_present(self, validated: dict) -> None:
         if 'password' in validated:
             validated['password_hash'] = self.auth.hash_password(validated.pop('password'))
 
-    def delete(self, current_user, user_id: int):
+    def delete(self, current_user, user_id: int) -> None:
         if not self.perm.user_has_permission(current_user, 'user:delete'):
             raise PermissionError('Permission refusée')
         if current_user.id == user_id:
@@ -147,12 +150,12 @@ class UserService:
             raise
 
 
-    def list_all(self, user):
+    def list_all(self, user) -> list[User]:
         if not self.perm.user_has_permission(user, 'user:read'):
             raise PermissionError('Permission refusée')
         return self.repo.list_all()
 
-    def get_by_id(self, user, user_id: int):
+    def get_by_id(self, user, user_id: int) -> User:
         if not self.perm.user_has_permission(user, 'user:read'):
             raise PermissionError('Permission refusée')
         return self.repo.get_by_id(user_id)

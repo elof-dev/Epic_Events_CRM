@@ -1,31 +1,26 @@
 from app.services.contract_service import ContractService
 import click
-from cli.helpers import prompt_select_option, prompt_list_or_empty, prompt_detail_actions
+from cli.helpers import prompt_menu
 from app.db.transaction import transactional
 from sentry_sdk import capture_exception
 
 
 class ContractsView:
+    """
+    Vue CLI pour la gestion des contrats.
+    Permet aux utilisateurs de créer, lire, mettre à jour et supprimer des contrats
+    en fonction de leurs permissions.
+    """
     def __init__(self, session, perm_service):
         self.session = session
         self.perm_service = perm_service
-
-    def get_contracts_menu_options(self, user):
-        options = []
-        if self.perm_service.user_has_permission(user, 'contract:read'):
-            if self.perm_service.user_has_permission(user, 'contract:create'):
-                options.append(('Créer un contrat', 'create'))
-            options.append(('Afficher tous les contrats', 'list_all'))
-            options.append(('Mes contrats', 'mine'))
-            options.append(('Mes contrats non signés', 'unsigned'))
-            options.append(('Mes contrats non payés', 'unpaid'))
-        return options
+        self.prompt_menu = prompt_menu
 
     def main_contract_menu(self, user):
         click.echo('\n=== Gestion des contrats ===')
         while True:
             options = self.get_contracts_menu_options(user)
-            action = prompt_select_option(options, prompt='Choix')
+            action = self.prompt_menu(options, prompt='Choix')
             if action is None:
                 return
             if action == 'list_all':
@@ -38,6 +33,19 @@ class ContractsView:
                 self.my_unpaid_contracts(user)
             elif action == 'create':
                 self.create_contract(user)
+
+    def get_contracts_menu_options(self, user):
+        options = []
+        if self.perm_service.user_has_permission(user, 'contract:read'):
+            if self.perm_service.user_has_permission(user, 'contract:create'):
+                options.append(('Créer un contrat', 'create'))
+            options.append(('Afficher tous les contrats', 'list_all'))
+            options.append(('Mes contrats', 'mine'))
+            options.append(('Mes contrats non signés', 'unsigned'))
+            options.append(('Mes contrats non payés', 'unpaid'))
+        return options
+
+
 
     def create_contract(self, user):
         contract_service = ContractService(self.session, self.perm_service)
@@ -77,7 +85,7 @@ class ContractsView:
         updates = {}
         while True:
             field_opts = [(label, field) for label, field in mod_fields]
-            field_choice = prompt_select_option(field_opts, prompt='Choisir champ')
+            field_choice = self.prompt_menu(field_opts, prompt='Choisir champ')
             if field_choice is None:
                 break
             label = next(lbl for lbl, fld in mod_fields if fld == field_choice)
@@ -118,7 +126,7 @@ class ContractsView:
         try:
             contracts = contract_service.list_all(user)
             contract_options = [(f"{c.id}: lié au client {c.customer.company_name}", c.id) for c in contracts]
-            choice = prompt_list_or_empty(contract_options, empty_message='Aucun contrat', prompt_text='Choisir contrat')
+            choice = self.prompt_menu(contract_options, prompt='Choisir contrat', empty_message='Aucun contrat')
             if choice is None:
                 return
             self.display_detail_contracts(user, choice)
@@ -144,7 +152,7 @@ class ContractsView:
                 )
                 for c in contracts
             ]
-            choice = prompt_list_or_empty(contract_options, empty_message="Vous n'avez pas encore de contrat", prompt_text='Choisir contrat')
+            choice = self.prompt_menu(contract_options, prompt='Choisir contrat', empty_message="Vous n'avez pas encore de contrat")
             if choice is None:
                 return
             self.display_detail_contracts(user, choice)
@@ -155,7 +163,7 @@ class ContractsView:
         contract_service = ContractService(self.session, self.perm_service)
         try:
             if user.role.name == 'management':
-                contracts = [c for c in contract_service.list_by_management_user(user.id) if not c.signed]
+                contracts = [c for c in contract_service.list_by_management_user(user, user.id) if not c.signed]
             elif user.role.name == 'sales':
                 customer_ids = [c.id for c in user.customers]
                 contracts = [c for c in contract_service.list_by_customer_ids(user, customer_ids) if not c.signed]
@@ -170,7 +178,7 @@ class ContractsView:
                 )
                 for c in contracts
             ]
-            choice = prompt_list_or_empty(contract_options, empty_message="Vous n'avez pas de contrat non signé", prompt_text='Choisir contrat')
+            choice = self.prompt_menu(contract_options, prompt='Choisir contrat', empty_message="Vous n'avez pas de contrat non signé")
             if choice is None:
                 return
             self.display_detail_contracts(user, choice)
@@ -181,7 +189,7 @@ class ContractsView:
         contract_service = ContractService(self.session, self.perm_service)
         try:
             if user.role.name == 'management':
-                contracts = [c for c in contract_service.list_by_management_user(user.id) if c.balance_due > 0]
+                contracts = [c for c in contract_service.list_by_management_user(user, user.id) if c.balance_due > 0]
             elif user.role.name == 'sales':
                 customer_ids = [c.id for c in user.customers]
                 contracts = [c for c in contract_service.list_by_customer_ids(user, customer_ids) if c.balance_due > 0]
@@ -196,7 +204,7 @@ class ContractsView:
                 )
                 for c in contracts
             ]
-            choice = prompt_list_or_empty(contract_options, empty_message="Vous n'avez pas de contrat impayé", prompt_text='Choisir contrat')
+            choice = self.prompt_menu(contract_options, prompt='Choisir contrat', empty_message="Vous n'avez pas de contrat impayé")
             if choice is None:
                 return
             self.display_detail_contracts(user, choice)
@@ -217,7 +225,7 @@ class ContractsView:
                 actions.append(('Modifier', 'update'))
         if self.perm_service.user_has_permission(user, 'contract:delete'):
             actions.append(('Supprimer', 'delete'))
-        action = prompt_detail_actions(actions, prompt_text='Choix')
+        action = self.prompt_menu(actions, prompt='Choix')
         if action is None:
             return
         if action == 'update':

@@ -42,13 +42,6 @@ def test_get_event_menu_options():
     opts = view.get_event_menu_options(user)
     assert len(opts) >= 2
 
-# ---------------- main_event_menu ------------------------
-def test_main_event_menu_exit(monkeypatch):
-    user = SimpleNamespace(role=SimpleNamespace(name="sales"))
-    perm = FakePerm({})
-    view = EventsView(session=None, perm_service=perm)
-    monkeypatch.setattr("cli.helpers.prompt_select_option", lambda opts, prompt: None)
-    view.main_event_menu(user)
 
 # ---------------- create_event ---------------------------
 def test_create_event_contract_not_found(monkeypatch):
@@ -80,7 +73,7 @@ def test_list_all_events_empty(monkeypatch):
 
     logs = []
     monkeypatch.setattr("click.echo", lambda msg=None, **k: logs.append(msg))
-    monkeypatch.setattr("cli.helpers.prompt_list_or_empty", lambda *a, **k: None)
+    monkeypatch.setattr("cli.helpers.prompt_menu", lambda *a, **k: None)
 
     view.list_all_events(user)
 

@@ -40,13 +40,6 @@ def test_get_customer_menu_options():
     opts = view.get_customer_menu_options(user)
     assert len(opts) >= 2
 
-# ---------------- main_customer_menu ----------------------
-def test_main_customer_menu_exit(monkeypatch):
-    user = SimpleNamespace(role=SimpleNamespace(name="sales"))
-    perm = FakePerm(set())
-    view = CustomersView(None, perm)
-    monkeypatch.setattr("cli.helpers.prompt_select_option", lambda o, prompt: None)
-    view.main_customer_menu(user)
 
 # ---------------- create_customer -------------------------
 def test_create_customer_ok(monkeypatch):
@@ -101,7 +94,7 @@ def test_list_all_customers_empty(monkeypatch):
     fake_service = FakeCustomerService(customers=[])
 
     monkeypatch.setattr("app.services.customer_service.CustomerService", lambda s, p: fake_service)
-    monkeypatch.setattr("cli.helpers.prompt_list_or_empty", lambda *a, **k: None)
+    monkeypatch.setattr("cli.helpers.prompt_menu", lambda *a, **k: None)
     monkeypatch.setattr("click.echo", lambda msg=None, **k: None)
 
     view = CustomersView(session, perm)

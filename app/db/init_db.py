@@ -100,7 +100,7 @@ def seed(session):
 
     session.flush()
 
-    # create users: 3 sales, 2 management, 2 support
+    # création users: 3 sales, 2 management, 2 support
     auth = AuthService()
     users = []
     # management
@@ -122,8 +122,8 @@ def seed(session):
     session.add_all(users)
     session.flush()
 
-    # Customers and contracts/events distribution per spec
-    # sales1: no client
+    # Clients et répartition des contrats/événements par spécification
+    # sales1: pas de client
 
     # sales2: 2 clients
     customer_a = Customer(user_sales_id=sales2.id, customer_first_name="Client", customer_last_name="A", email="clienta@example.com", phone_number="+33900000001", company_name="Company A")
@@ -131,9 +131,9 @@ def seed(session):
     session.add_all([customer_a, customer_b])
     session.flush()
 
-    # cust_a: no contract no event
+    # customer_a: pas de contrat pas d'événement
 
-    # customer_b: 4 contracts created by manager1
+    # customer_b: 4 contrats créés par manager1
     contract_1 = Contract(customer_id=customer_b.id, user_management_id=manager1.id, total_amount=Decimal("1000.00"), balance_due=Decimal("1000.00"), signed=False)
     contract_2 = Contract(customer_id=customer_b.id, user_management_id=manager1.id, total_amount=Decimal("2000.00"), balance_due=Decimal("1000.00"), signed=True)
     contract_3 = Contract(customer_id=customer_b.id, user_management_id=manager1.id, total_amount=Decimal("3000.00"), balance_due=Decimal("0.00"), signed=True)
@@ -141,13 +141,13 @@ def seed(session):
     session.add_all([contract_1, contract_2, contract_3, contract_4])
     session.flush()
 
-    # c4 has 2 events: one without support, one with support assigned
+    # contract_4 a 2 événements : un sans support, un avec support assigné
     now = datetime.datetime.now(datetime.timezone.utc)
     event_1 = Event(contract_id=contract_4.id, customer_id=customer_b.id, user_support_id=None, event_name="Name_Event_1", start_datetime=now, end_datetime=now + datetime.timedelta(hours=2), location="Paris", attendees=50, note="No support assigned")
     event_2 = Event(contract_id=contract_4.id, customer_id=customer_b.id, user_support_id=support1.id, event_name="Name_Event_2", start_datetime=now + datetime.timedelta(days=1), end_datetime=now + datetime.timedelta(days=1, hours=4), location="Lyon", attendees=80, note="With support assigned")
     session.add_all([event_1, event_2])
 
-    # sales3: 1 client with 2 contracts created by manager2
+    # sales3: 1 client avec 2 contracts créés by manager2
     customer_c = Customer(user_sales_id=sales3.id, customer_first_name="Client", customer_last_name="C", email="clientc@example.com", phone_number="+33900000003", company_name="Company C")
     session.add(customer_c)
     session.flush()
@@ -157,7 +157,7 @@ def seed(session):
     session.add_all([contract_5, contract_6])
     session.flush()
 
-    # c6 has 2 events: one with other support assigned, one without support
+    # contract_6 a 2 events: un avec un autre support assigné, un sans support
     event_3 = Event(contract_id=contract_6.id, customer_id=customer_c.id, user_support_id=support2.id, event_name="Name_Event_3", start_datetime=now + datetime.timedelta(days=2), end_datetime=now + datetime.timedelta(days=2, hours=3), location="Nice", attendees=30, note="Support2 assigned")
     event_4 = Event(contract_id=contract_6.id, customer_id=customer_c.id, user_support_id=None, event_name="Name_Event_4", start_datetime=now + datetime.timedelta(days=3), end_datetime=now + datetime.timedelta(days=3, hours=2), location="Bordeaux", attendees=20, note="No support assigned")
     session.add_all([event_3, event_4])

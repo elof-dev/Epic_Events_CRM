@@ -42,5 +42,5 @@ class AuthService:
         token = jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
         return token
 
-    def decode_token(self, token: str):
+    def decode_token(self, token: str) -> dict:
         return jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])

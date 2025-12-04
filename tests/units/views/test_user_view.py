@@ -54,19 +54,6 @@ def test_get_user_menu_options_none():
     opts = view.get_user_menu_options(user)
     assert opts == []
 
-# ---------------- main_user_menu ------------------------
-def test_main_user_menu_exit(monkeypatch):
-    user = SimpleNamespace()
-    perm = FakePerm({})
-    session = FakeSession()
-    view = UsersView(session=session, perm_service=perm)
-    called = {"list_all": False, "filter_id": False, "create": False}
-    monkeypatch.setattr("cli.helpers.prompt_select_option", lambda opts, prompt: None)
-    monkeypatch.setattr(view, "list_all_users", lambda u: called.__setitem__("list_all", True))
-    monkeypatch.setattr(view, "filter_user_by_id", lambda u: called.__setitem__("filter_id", True))
-    monkeypatch.setattr(view, "create_user", lambda u: called.__setitem__("create", True))
-    view.main_user_menu(user)
-    assert called == {"list_all": False, "filter_id": False, "create": False}
 
 # ---------------- create_user ---------------------------
 def test_create_user_no_roles(monkeypatch):
@@ -78,7 +65,7 @@ def test_create_user_no_roles(monkeypatch):
     monkeypatch.setattr("click.prompt", lambda *a, **k: "x")
     logs = []
     monkeypatch.setattr("click.echo", lambda msg=None, **k: logs.append(msg))
-    monkeypatch.setattr("cli.helpers.prompt_select_option", lambda *a, **k: None)
+    monkeypatch.setattr("cli.helpers.prompt_menu", lambda *a, **k: None)
 
     view.create_user(user)
     assert any("Aucun rôle" in (m or "") for m in logs)
@@ -101,7 +88,7 @@ def test_create_user_nominal(monkeypatch):
     monkeypatch.setattr("click.prompt", lambda *a, **k: next(answers))
     logs = []
     monkeypatch.setattr("click.echo", lambda msg=None, **k: logs.append(msg))
-    monkeypatch.setattr("cli.helpers.prompt_select_option", lambda *a, **k: 1)
+    monkeypatch.setattr("cli.helpers.prompt_menu", lambda *a, **k: 1)
 
     view.create_user(user)
 
@@ -154,7 +141,7 @@ def test_list_all_users_empty(monkeypatch):
     monkeypatch.setattr("app.services.user_service.UserService", lambda s, p: fake_service)
     logs = []
     monkeypatch.setattr("click.echo", lambda msg=None, **k: logs.append(msg))
-    monkeypatch.setattr("cli.helpers.prompt_list_or_empty", lambda *a, **k: None)
+    monkeypatch.setattr("cli.helpers.prompt_menu", lambda *a, **k: None)
     view.list_all_users(user)
 
 

@@ -4,6 +4,7 @@ from pydantic import ValidationError
 from app.schemas.event import EventCreate, EventUpdate
 from sqlalchemy.exc import IntegrityError
 from typing import Optional
+from app.models.event import Event
 
 
 class EventService:
@@ -33,12 +34,12 @@ class EventService:
     - Les méthodes lèvent `PermissionError` ou `ValueError` selon les cas.
     """
 
-    def __init__(self, session, permission_service):
+    def __init__(self, session, permission_service) -> None:
         self.session = session
         self.repo = EventRepository(session)
         self.perm = permission_service
 
-    def create(self, user, **fields):
+    def create(self, user, **fields) -> Event:
         if not self.perm.user_has_permission(user, "event:create"):
             raise PermissionError("Permission refusée")
         try:
@@ -68,7 +69,7 @@ class EventService:
             self.session.rollback()
             raise ValueError('Violation de contrainte en base (référence invalide possible)') from exc
 
-    def update(self, user, event_id: int, **fields):
+    def update(self, user, event_id: int, **fields) -> Event:
         event = self.repo.get_by_id(event_id)
         if not event:
             raise ValueError("Événement non trouvé")
@@ -140,7 +141,7 @@ class EventService:
             self.session.rollback()
             raise ValueError('Violation de contrainte en base (référence invalide possible)') from exc
 
-    def delete(self, user, event_id: int):
+    def delete(self, user, event_id: int) -> None:
         event = self.repo.get_by_id(event_id)
         if not event:
             raise ValueError("Event not found")
@@ -156,12 +157,12 @@ class EventService:
 
 
 
-    def list_all(self, user):
+    def list_all(self, user) -> list[Event]:
         if not self.perm.user_has_permission(user, "event:read"):
             raise PermissionError("User not allowed to read events")
         return self.repo.list_all()
 
-    def list_mine(self, user):
+    def list_mine(self, user) -> list[Event]:
         # conservé pour compatibilité ; les vues doivent gérer rôle/appartenance et appeler des wrappers appropriés
         return []
 

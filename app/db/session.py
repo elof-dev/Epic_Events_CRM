@@ -3,6 +3,10 @@ from sqlalchemy.orm import sessionmaker
 from app.db.config import DB_USER, DB_PASS, DB_HOST, DB_PORT, DB_NAME
 
 def get_database_url(db_name=None):
+    """
+    Construit l'URL de connexion à la base de données MySQL.
+    """
+
     
     db = db_name or DB_NAME
     user = DB_USER
@@ -13,6 +17,9 @@ def get_database_url(db_name=None):
 
 
 def create_engine_and_session(db_name=None, **kwargs):
+    """ 
+    Convenience helper: crée un engine + SessionLocal SQLAlchemy prêts à l'emploi.
+    """
     url = get_database_url(db_name)
     engine = create_engine(url, future=True, echo=False, **kwargs)
     SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False, future=True)

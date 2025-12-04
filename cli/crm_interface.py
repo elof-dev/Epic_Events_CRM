@@ -7,6 +7,7 @@ from cli.views.users import UsersView
 from cli.views.customers import CustomersView
 from cli.views.contracts import ContractsView
 from cli.views.events import EventsView
+from cli.helpers import prompt_menu
 
 
 
@@ -20,7 +21,8 @@ def prompt_login(session):
     if not user or not auth.verify_password(user.password_hash, password):
         click.echo("Authentification échouée")
         return None
-    click.echo(f"Connecté en tant que {user.username} ({user.role.name})")
+    
+    click.echo(f"\nConnecté en tant que {user.username} ({user.role.name})")
     return user
 
 
@@ -41,7 +43,7 @@ def run_interface():
 
             while True:
                 services = perm_service.available_menus_for_user(user)
-                click.echo('\nMenu principal :')
+                click.echo('\nMenu principal :\n')
                 options = []
                 if 'display_menu_users' in services:
                     def users_menu_handler(current_user, db_session, perm_service):
@@ -60,17 +62,10 @@ def run_interface():
                         EventsView(db_session, perm_service).main_event_menu(current_user)
                     options.append(('Gestion des évènements', events_menu_handler))
 
-                click.echo('0. Déconnexion')
-                for idx, (label, _) in enumerate(options, start=1):
-                    click.echo(f"{idx}. {label}")
-                choice = click.prompt("Choix", type=int)
-                if choice == 0:
+                handler = prompt_menu(options, prompt='Choix')
+                if handler is None:
                     click.echo("Déconnexion...")
                     break
-                if 1 <= choice <= len(options):
-                    _, handler = options[choice - 1]
-                    handler(user, session, perm_service)
-                else:
-                    click.echo("Choix invalide")
+                handler(user, session, perm_service)
     finally:
         session.close()

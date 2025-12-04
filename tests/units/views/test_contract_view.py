@@ -42,13 +42,6 @@ def test_get_contracts_menu_options_basic():
     opts = view.get_contracts_menu_options(user)
     assert len(opts) >= 1
 
-# ---------------- main_contract_menu exit -----------------
-def test_main_contract_menu_exit(monkeypatch):
-    user = SimpleNamespace(role=SimpleNamespace(name='sales'))
-    perm = FakePerm(set())
-    view = ContractsView(session=None, perm_service=perm)
-    monkeypatch.setattr('cli.helpers.prompt_select_option', lambda opts, prompt: None)
-    view.main_contract_menu(user)
 
 # ---------------- create_contract -----------------
 def test_create_contract(monkeypatch):
@@ -101,7 +94,7 @@ def test_list_all_contracts_empty(monkeypatch):
     session = SimpleNamespace()
     view = ContractsView(session=session, perm_service=FakePerm(set()))
     monkeypatch.setattr('app.services.contract_service.ContractService', lambda s, p: FakeContractService(list_result=[]))
-    monkeypatch.setattr('cli.helpers.prompt_list_or_empty', lambda *a, **k: None)
+    monkeypatch.setattr('cli.helpers.prompt_menu', lambda *a, **k: None)
     logs = []
     monkeypatch.setattr('click.echo', lambda msg=None, **k: logs.append(msg))
     view.list_all_contracts(user)

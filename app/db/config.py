@@ -1,7 +1,7 @@
 from dotenv import load_dotenv
 import os
 
-# Minimal config: read environment variables from .env without any error handling
+# Charge les variables d'environnement depuis le fichier .env
 load_dotenv()
 
 DB_HOST = os.getenv("DB_HOST")
