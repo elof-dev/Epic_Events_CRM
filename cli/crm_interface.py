@@ -1,8 +1,10 @@
 import click
+from pathlib import Path
 from app.db.session import get_session
 from app.repositories.user_repository import UserRepository
 from app.services.auth_service import AuthService
 from app.services.permission_service import PermissionService
+from app.models.user import User
 from cli.views.users import UsersView
 from cli.views.customers import CustomersView
 from cli.views.contracts import ContractsView
@@ -10,15 +12,62 @@ from cli.views.events import EventsView
 from cli.helpers import prompt_menu
 
 
+_TOKEN_FILE = Path(__file__).resolve().parent.parent / ".epic_events_token"
 
-def prompt_login(session):
+
+def _read_token() -> str | None:
+    try:
+        data = _TOKEN_FILE.read_text(encoding="utf-8").strip()
+    except FileNotFoundError:
+        return None
+    except OSError:
+        return None
+    return data or None
+
+
+def _write_token(token: str) -> None:
+    try:
+        _TOKEN_FILE.write_text(token.strip(), encoding="utf-8")
+    except OSError:
+        pass
+
+
+def _clear_token() -> None:
+    try:
+        _TOKEN_FILE.unlink()
+    except FileNotFoundError:
+        pass
+    except OSError:
+        pass
+
+
+def _user_from_token(session, auth_service: AuthService):
+    token = _read_token()
+    if not token:
+        return None
+    try:
+        payload = auth_service.decode_token(token)
+        user_id = int(payload.get("sub", ""))
+    except Exception:
+        _clear_token()
+        return None
+    if not user_id:
+        _clear_token()
+        return None
+    user = session.get(User, user_id)
+    if not user:
+        _clear_token()
+        return None
+    return user
+
+
+def prompt_login(session, auth_service: AuthService):
     click.echo("Bienvenue sur Epic Events CRM")
     username = click.prompt("Nom d'utilisateur")
     password = click.prompt("Mot de passe", hide_input=True)
     user_repo = UserRepository(session)
     user = user_repo.get_by_username(username)
-    auth = AuthService()
-    if not user or not auth.verify_password(user.password_hash, password):
+    if not user or not auth_service.verify_password(user.password_hash, password):
         click.echo("Authentification échouée")
         return None
     
@@ -33,11 +82,18 @@ def run_interface():
     handlers in `cli.views`.
     """
     session = get_session()
+    auth = AuthService()
     try:
         while True:
-            user = prompt_login(session)
+            user = _user_from_token(session, auth)
+            if user:
+                click.echo(f"\nSession restauree pour {user.username} ({user.role.name})")
+            else:
+                user = prompt_login(session, auth)
             if not user:
                 continue
+            token = auth.create_token(user.id)
+            _write_token(token)
 
             perm_service = PermissionService(session)
 
@@ -62,9 +118,10 @@ def run_interface():
                         EventsView(db_session, perm_service).main_event_menu(current_user)
                     options.append(('Gestion des évènements', events_menu_handler))
 
-                handler = prompt_menu(options, prompt='Choix')
+                handler = prompt_menu(options, prompt='Choix', return_label='0=Déconnexion')
                 if handler is None:
                     click.echo("Déconnexion...")
+                    _clear_token()
                     break
                 handler(user, session, perm_service)
     finally:
