@@ -56,8 +56,14 @@ class ContractService:
             raise ValueError("Contrat non trouvé")
         self._ensure_sales_contract_owner(contract, user)
 
+        fields_for_validation = dict(fields)
+        if 'total_amount' in fields and 'balance_due' not in fields:
+            fields_for_validation['balance_due'] = contract.balance_due
+        if 'balance_due' in fields and 'total_amount' not in fields:
+            fields_for_validation['total_amount'] = contract.total_amount
+
         try:
-            validated = ContractUpdate(**fields).model_dump(exclude_none=True)
+            validated = ContractUpdate(**fields_for_validation).model_dump(exclude_none=True)
         except ValidationError as exc:
             errors = exc.errors()
             messages = "; ".join(f"{'.'.join(map(str, e.get('loc', [])))}: {e.get('msg')}" for e in errors)

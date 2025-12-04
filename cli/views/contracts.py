@@ -17,8 +17,8 @@ class ContractsView:
         self.prompt_menu = prompt_menu
 
     def main_contract_menu(self, user):
-        click.echo('\n=== Gestion des contrats ===')
         while True:
+            click.echo('\n=== Gestion des contrats ===')
             options = self.get_contracts_menu_options(user)
             action = self.prompt_menu(options, prompt='Choix')
             if action is None:
@@ -51,10 +51,10 @@ class ContractsView:
         contract_service = ContractService(self.session, self.perm_service)
         try:
             customer_id = click.prompt('ID client associé')
-            total_amount = click.prompt('Montant total')
+            total_amount = click.prompt('Montant total en €')
             signed_input = click.prompt('Signé ? (o/n)', default='n')
             signed = signed_input.lower().startswith('o')
-            balance_due = click.prompt('Balance due', default=str(total_amount))
+            balance_due = click.prompt('Solde dû en €', default=str(total_amount))
 
             fields = {
                 'total_amount': total_amount,
@@ -77,10 +77,10 @@ class ContractsView:
             click.echo('Contrat introuvable')
             return
         mod_fields = [
-            ('Montant total', 'total_amount'),
-            ('Balance due', 'balance_due'),
+            ('Montant total en €', 'total_amount'),
+            ('Solde dû en €', 'balance_due'),
             ('Signé (o/n)', 'signed'),
-            ('ID client', 'customer_id'),
+            ('ID client associé', 'customer_id'),
         ]
         updates = {}
         while True:
@@ -127,7 +127,8 @@ class ContractsView:
         contract_service = ContractService(self.session, self.perm_service)
         try:
             contracts = contract_service.list_all(user)
-            contract_options = [(f"{c.id}: lié au client {c.customer.company_name}", c.id) for c in contracts]
+            click.echo('\n=== Liste des contrats ===\n-> Choisir un contrat pour afficher les détails\n')
+            contract_options = [(f"ID: {c.id}: contrat lié au client {c.customer.company_name}", c.id) for c in contracts]
             choice = self.prompt_menu(contract_options, prompt='Choisir contrat', empty_message='Aucun contrat')
             if choice is None:
                 return
@@ -146,15 +147,8 @@ class ContractsView:
                 contracts = contract_service.list_by_customer_ids(user, customer_ids)
             else:
                 contracts = []
-            click.echo('\nListe de mes contrats:')
-            contract_options = [
-                (
-                    f"{c.id}: {getattr(c, 'contract_id', '')} - "
-                    f"{(c.customer.company_name if c.customer and getattr(c.customer, 'company_name', None) else (c.customer.customer_first_name + ' ' + c.customer.customer_last_name if c.customer else 'N/A'))}",
-                    c.id,
-                )
-                for c in contracts
-            ]
+            click.echo('\n=== Liste de mes contrats ===\n-> Choisir un contrat pour afficher les détails\n')
+            contract_options = [(f"ID: {c.id}: contrat lié au client {c.customer.company_name}", c.id) for c in contracts]
             choice = self.prompt_menu(contract_options, prompt='Choisir contrat', empty_message="Vous n'avez pas encore de contrat")
             if choice is None:
                 return
@@ -173,15 +167,8 @@ class ContractsView:
                 contracts = [c for c in contract_service.list_by_customer_ids(user, customer_ids) if not c.signed]
             else:
                 contracts = []
-            click.echo('\nListe de mes contrats non signés:')
-            contract_options = [
-                (
-                    f"{c.id}: {getattr(c, 'contract_id', '')} - "
-                    f"{(c.customer.company_name if c.customer and getattr(c.customer, 'company_name', None) else (c.customer.customer_first_name + ' ' + c.customer.customer_last_name if c.customer else 'N/A'))}",
-                    c.id,
-                )
-                for c in contracts
-            ]
+            click.echo('\n=== Liste de mes contrats non signés ===\n-> Choisir un contrat pour afficher les détails\n')
+            contract_options = [(f"ID: {c.id}: contrat lié au client {c.customer.company_name}", c.id) for c in contracts]
             choice = self.prompt_menu(contract_options, prompt='Choisir contrat', empty_message="Vous n'avez pas de contrat non signé")
             if choice is None:
                 return
@@ -200,15 +187,8 @@ class ContractsView:
                 contracts = [c for c in contract_service.list_by_customer_ids(user, customer_ids) if c.balance_due > 0]
             else:
                 contracts = []
-            click.echo('\nListe de mes contrats impayés:')
-            contract_options = [
-                (
-                    f"{c.id}: {getattr(c, 'contract_id', '')} - "
-                    f"{(c.customer.company_name if c.customer and getattr(c.customer, 'company_name', None) else (c.customer.customer_first_name + ' ' + c.customer.customer_last_name if c.customer else 'N/A'))}",
-                    c.id,
-                )
-                for c in contracts
-            ]
+            click.echo('\n=== Liste de mes contrats impayés ===\n-> Choisir un contrat pour afficher les détails\n')
+            contract_options = [(f"ID: {c.id}: contrat lié au client {c.customer.company_name}", c.id) for c in contracts]
             choice = self.prompt_menu(contract_options, prompt='Choisir contrat', empty_message="Vous n'avez pas de contrat impayé")
             if choice is None:
                 return
@@ -222,7 +202,18 @@ class ContractsView:
         if not contract:
             click.echo('Contrat introuvable')
             return
-        click.echo(f"\nID: {contract.id}\nTotal: {contract.total_amount}\nBalance: {contract.balance_due}\nSigné: {contract.signed}\nClient: {contract.customer_id}\nManager: {contract.user_management_id}")
+        click.echo("\n=== Détails du contrat sélectionné ===")
+        signed_label = "oui" if getattr(contract, 'signed', False) else "non"
+        click.echo(
+            f"ID: {contract.id}\n"
+            f"Montant total du contrat en €: {contract.total_amount}\n"
+            f"Solde dû en €: {contract.balance_due}\n"
+            f"Signé: {signed_label}\n"
+            f"ID Client: {contract.customer_id}\n"
+            f"Nom du client: {contract.customer.company_name}\n"
+            f"ID Manager: {contract.user_management_id}\n"
+            f"Nom du manager: {getattr(contract.manager, 'user_first_name', '')} {getattr(contract.manager, 'user_last_name', '')}"
+        )
         actions = []
         if self.perm_service.user_has_permission(user, 'contract:update'):
             sales_role = getattr(user, 'role', None) and getattr(user.role, 'name', None) == 'sales'

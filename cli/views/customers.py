@@ -18,8 +18,8 @@ class CustomersView:
         self.click = click
 
     def main_customer_menu(self, user) -> None:
-        self.click.echo('\n=== Gestion des clients ===')
         while True:
+            self.click.echo('\n=== Gestion des clients ===')
             options = self.get_customer_menu_options(user)
             action = self.prompt_menu(options, prompt='Choix')
             if action is None:
@@ -118,7 +118,8 @@ class CustomersView:
         cust_service = CustomerService(self.session, self.perm_service)
         try:
             customers = cust_service.list_all(user)
-            customer_options = [(f"{c.id}: {c.customer_first_name} {c.customer_last_name}", c.id) for c in customers]
+            self.click.echo('\n=== Liste des clients ===\n-> Choisir un client pour afficher les détails\n')
+            customer_options = [(f"ID {c.id}: {c.customer_first_name} {c.customer_last_name} - Entreprise: {c.company_name} - Commercial ID: {c.user_sales_id}" , c.id) for c in customers]
             choice = self.prompt_menu(customer_options, prompt='Choisir client', empty_message="Aucun client")
             if choice is None:
                 return
@@ -148,7 +149,8 @@ class CustomersView:
         if not customer:
             self.click.echo('Client introuvable')
             return
-        self.click.echo(f"\nID: {customer.id}\nNom: {customer.customer_first_name} {customer.customer_last_name}\nEntreprise: {customer.company_name}\nEmail: {customer.email}\nSales id: {customer.user_sales_id}")
+        self.click.echo("\n=== Détails du client sélectionné ===")
+        self.click.echo(f"ID: {customer.id}\nNom: {customer.customer_first_name} {customer.customer_last_name}\nEntreprise: {customer.company_name}\nEmail: {customer.email}\nTéléphone: {customer.phone_number}\nCommercial ID: {customer.user_sales_id}\nNom du commercial: {getattr(customer.sales_user, 'user_first_name', '')} {getattr(customer.sales_user, 'user_last_name', '')}")
         actions = []
         is_customer_owner = getattr(customer, 'user_sales_id', None) == getattr(user, 'id', None)
         if self.perm_service.user_has_permission(user, 'customer:update') and is_customer_owner:

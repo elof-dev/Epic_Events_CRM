@@ -154,8 +154,9 @@ class UsersView:
         user_service = UserService(self.session, self.perm_service)
         try:
             users = user_service.list_all(user)
+            self.click.echo('\n=== Liste des utilisateurs ===\n-> Choisir un utilisateur pour afficher les détails\n')
             user_options = [(
-                f"{u.id}: {u.user_first_name} {u.user_last_name} ({u.username})",
+                f"ID {u.id}: {u.user_first_name} {u.user_last_name}, username: {u.username}, role: {getattr(u.role, 'name', u.role_id)}",
                 u.id,
             ) for u in users]
             choice = self.prompt_menu(user_options, empty_message='Aucun utilisateur')
@@ -187,7 +188,8 @@ class UsersView:
         if not target:
             self.click.echo('Utilisateur introuvable')
             return
-        self.click.echo(f"\nID: {target.id}\nPrénom: {target.user_first_name}\nNom: {target.user_last_name}\nUsername: {target.username}\nEmail: {target.email}\nTéléphone: {target.phone_number}\nRole: {getattr(target.role, 'name', target.role_id)}")
+        self.click.echo("\n=== Détails de l'utilisateur sélectionné ===")
+        self.click.echo(f"ID: {target.id}\nPrénom: {target.user_first_name}\nNom: {target.user_last_name}\nUsername: {target.username}\nEmail: {target.email}\nTéléphone: {target.phone_number}\nRole: {getattr(target.role, 'name', target.role_id)}")
         actions = []
         if self.perm_service.user_has_permission(current_user, 'user:update') and current_user.role.name == 'management':
             actions.append(('Modifier', 'update'))

@@ -56,6 +56,7 @@ class EventsView:
             end_datetime = self.click.prompt('Date/heure de fin (YYYY-MM-DD HH:MM)', default='')
             location = self.click.prompt('Lieu', default='')
             attendees = self.click.prompt('Nombre participants', default='0')
+            note = self.click.prompt('Note', default='')
             support_id = self.click.prompt('ID support', default='')
             fields = {
                 'contract_id': contract_id,
@@ -65,6 +66,7 @@ class EventsView:
                 'end_datetime': end_datetime or None,
                 'location': location or None,
                 'attendees': attendees or None,
+                'note': note or None,
                 'user_support_id': support_id or None,
             }
             from app.models.contract import Contract
@@ -86,7 +88,8 @@ class EventsView:
         event_service = EventService(self.session, self.perm_service)
         try:
             events = event_service.list_all(user)
-            opts = [(f"{e.id}: {e.event_name}", e.id) for e in events]
+            self.click.echo('\n=== Liste des évènements ===\n-> Choisir un évènement pour afficher les détails\n')
+            opts = [(f"ID: {e.id}: {e.event_name}", e.id) for e in events]
             choice = self.prompt_menu(opts, prompt='Choisir évènement', empty_message='Aucun évènement')
             if choice is None:
                 return
@@ -108,7 +111,8 @@ class EventsView:
                     events.extend(event_service.list_by_customer(cid))
             else:
                 events = []
-            opts = [(f"{e.id}: {e.event_name}", e.id) for e in events]
+            self.click.echo('\n=== Liste des évènements ===\n-> Choisir un évènement pour afficher les détails\n')
+            opts = [(f"ID: {e.id}: {e.event_name}", e.id) for e in events]
             choice = self.prompt_menu(opts, prompt='Choisir évènement', empty_message="Aucun évènement")
             if choice is None:
                 return
@@ -121,7 +125,8 @@ class EventsView:
         event_service = EventService(self.session, self.perm_service)
         try:
             events = [e for e in event_service.list_all(user) if getattr(e, 'user_support_id', None) is None]
-            opts = [(f"{e.id}: {e.event_name}", e.id) for e in events]
+            self.click.echo('\n=== Liste des évènements ===\n-> Choisir un évènement pour afficher les détails\n')
+            opts = [(f"ID: {e.id}: {e.event_name}", e.id) for e in events]
             choice = self.prompt_menu(opts, prompt='Choisir évènement', empty_message='Aucun évènement')
             if choice is None:
                 return
@@ -136,7 +141,20 @@ class EventsView:
         if not event:
             self.click.echo('Evènement introuvable')
             return
-        self.click.echo(f"\nID: {event.id}\nNom: {event.event_name}\nContract: {event.contract_id}\nClient: {event.customer_id}\nDébut: {event.start_datetime}\nFin: {event.end_datetime}\nLieu: {event.location}\nParticipants: {event.attendees}\nSupport: {event.user_support_id}")
+        self.click.echo("\n=== Détails de l'évènement sélectionné ===")
+        support_display = getattr(event, 'user_support_id', None)
+        support_display = support_display if support_display is not None else 'Aucun support'
+        self.click.echo(
+            f"ID: {event.id}\n"
+            f"Nom: {event.event_name}\n"
+            f"Contract: {event.contract_id}\n"
+            f"Client: {event.customer_id}\n"
+            f"Début: {event.start_datetime}\n"
+            f"Fin: {event.end_datetime}\n"
+            f"Lieu: {event.location}\n"
+            f"Participants: {event.attendees}\n"
+            f"Support: {support_display}"
+        )
         actions = []
         if self.perm_service.user_has_permission(current_user, 'event:update'):
             support_role = getattr(getattr(current_user, 'role', None), 'name', None) == 'support'
@@ -173,13 +191,14 @@ class EventsView:
                 self.click.echo(f'Erreur mise à jour: {e}')
             return
         mod_fields = [
-            ('Client', 'customer_id'),
-            ('Contrat', 'contract_id'),
+            ('Client ID', 'customer_id'),
+            ('Contrat ID', 'contract_id'),
             ('Nom', 'event_name'),
             ('Début (YYYY-MM-DD HH:MM)', 'start_datetime'),
             ('Fin (YYYY-MM-DD HH:MM)', 'end_datetime'),
             ('Lieu', 'location'),
             ('Participants', 'attendees'),
+            ('Note', 'note'),
         ]
         while True:
             field_opts = [(label, field) for label, field in mod_fields]
@@ -190,14 +209,8 @@ class EventsView:
             field = field_choice
             current_val = getattr(event, field)
             new_raw = self.click.prompt(label, default=str(current_val) if current_val is not None else '')
-            if field in ('start_datetime', 'end_datetime') and new_raw:
-                val = new_raw
-            elif field == 'attendees':
-                val = new_raw or None
-            elif field == 'user_support_id':
-                val = new_raw or None
-            else:
-                val = new_raw
+            optional_fields = {'start_datetime', 'end_datetime', 'location', 'attendees', 'note'}
+            val = new_raw if field not in optional_fields else (new_raw or None)
             try:
                 with transactional(self.session):
                     event_service.update(current_user, event.id, **{field: val})
