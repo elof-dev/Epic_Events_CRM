@@ -2,6 +2,7 @@ from app.services.event_service import EventService
 import click
 from cli.helpers import prompt_menu
 from app.db.transaction import transactional
+from sentry import report_exception
 
 class EventsView:
     """
@@ -78,6 +79,7 @@ class EventsView:
                 new_e = event_service.create(user, **fields)
             self.click.echo(f'Evènement créé id={new_e.id}')
         except Exception as e:
+            report_exception(e)
             self.click.echo(f'Erreur création: {e}')
 
     def list_all_events(self, user):
@@ -90,6 +92,7 @@ class EventsView:
                 return
             self.display_detail_events(user, choice)
         except Exception as e:
+            report_exception(e)
             self.click.echo(f'Erreur: {e}')
 
     def my_events(self, user):
@@ -111,6 +114,7 @@ class EventsView:
                 return
             self.display_detail_events(user, choice)
         except Exception as e:
+            report_exception(e)
             self.click.echo(f'Erreur: {e}')
 
     def events_without_support(self, user):
@@ -123,6 +127,7 @@ class EventsView:
                 return
             self.display_detail_events(user, choice)
         except Exception as e:
+            report_exception(e)
             self.click.echo(f'Erreur: {e}')
 
     def display_detail_events(self, current_user, event_id):
@@ -164,6 +169,7 @@ class EventsView:
                     event_service.update(current_user, event.id, user_support_id=int(new_support))
                 self.click.echo('Support mis à jour')
             except Exception as e:
+                report_exception(e)
                 self.click.echo(f'Erreur mise à jour: {e}')
             return
         mod_fields = [
@@ -198,6 +204,7 @@ class EventsView:
                 self.click.echo('Champ mis à jour')
                 event = self.session.get(Event, event_id)
             except Exception as e:
+                report_exception(e)
                 self.click.echo(f'Erreur mise à jour: {e}')
 
     def delete_event(self, current_user, event_id):
@@ -214,4 +221,5 @@ class EventsView:
                     event_service.delete(current_user, event.id)
                 self.click.echo('Evènement supprimé')
         except Exception as e:
+            report_exception(e)
             self.click.echo(f'Erreur suppression: {e}')

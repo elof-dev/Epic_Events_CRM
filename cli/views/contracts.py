@@ -2,7 +2,7 @@ from app.services.contract_service import ContractService
 import click
 from cli.helpers import prompt_menu
 from app.db.transaction import transactional
-from sentry_sdk import capture_exception
+from sentry import report_exception
 
 
 class ContractsView:
@@ -66,7 +66,7 @@ class ContractsView:
                 new_contract = contract_service.create(user, **fields)
             click.echo(f'Contrat créé id={new_contract.id}')
         except Exception as e:
-            capture_exception(e)
+            report_exception(e)
             click.echo(f'Erreur création: {e}')
 
     def update_contract(self, user, contract_id):
@@ -103,6 +103,7 @@ class ContractsView:
                 click.echo('Contrat mis à jour')
                 contract = self.session.get(Contract, contract_id)
             except Exception as e:
+                report_exception(e)
                 click.echo(f'Erreur mise à jour: {e}')
 
     def delete_contract(self, user, contract_id):
@@ -119,6 +120,7 @@ class ContractsView:
                     contract_service.delete(user, contract.id)
                 click.echo('Contrat supprimé')
         except Exception as e:
+            report_exception(e)
             click.echo(f'Erreur: {e}')
 
     def list_all_contracts(self, user):
@@ -131,6 +133,7 @@ class ContractsView:
                 return
             self.display_detail_contracts(user, choice)
         except Exception as e:
+            report_exception(e)
             click.echo(f'Erreur: {e}')
 
     def my_contracts(self, user):
@@ -157,6 +160,7 @@ class ContractsView:
                 return
             self.display_detail_contracts(user, choice)
         except Exception as e:
+            report_exception(e)
             click.echo(f'Erreur: {e}')
 
     def my_unsigned_contracts(self, user):
@@ -183,6 +187,7 @@ class ContractsView:
                 return
             self.display_detail_contracts(user, choice)
         except Exception as e:
+            report_exception(e)
             click.echo(f'Erreur: {e}')
 
     def my_unpaid_contracts(self, user):

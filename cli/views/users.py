@@ -2,6 +2,7 @@ from app.services.user_service import UserService
 import click
 from cli.helpers import prompt_menu
 from app.db.transaction import transactional
+from sentry import report_exception
 
 
 class UsersView:
@@ -76,6 +77,7 @@ class UsersView:
                 new_user = user_service.create(user, **fields)
             self.click.echo(f'Utilisateur créé id={new_user.id}')
         except Exception as e:
+            report_exception(e)
             self.click.echo(f'Erreur création: {e}')
 
     def update_user(self, current_user, target_user_id) -> None:
@@ -128,6 +130,7 @@ class UsersView:
                 self.click.echo('Champ mis à jour')
                 target = self.session.get(User, target_user_id)
             except Exception as e:
+                report_exception(e)
                 self.click.echo(f'Erreur mise à jour: {e}')
 
     def delete_user(self, current_user, target_user_id) -> None:
@@ -144,6 +147,7 @@ class UsersView:
                     user_service.delete(current_user, target.id)
                 self.click.echo('Utilisateur supprimé')
         except Exception as e:
+            report_exception(e)
             self.click.echo(f'Erreur suppression: {e}')
 
     def list_all_users(self, user) -> None:
@@ -159,6 +163,7 @@ class UsersView:
                 return
             self.display_detail_users(user, choice)
         except Exception as e:
+            report_exception(e)
             self.click.echo(f'Erreur: {e}')
 
     def filter_user_by_id(self, user) -> None:
@@ -173,6 +178,7 @@ class UsersView:
                 return
             self.display_detail_users(user, target.id)
         except Exception as e:
+            report_exception(e)
             self.click.echo(f'Erreur: {e}')
 
     def display_detail_users(self, current_user, target_user_id) -> None:

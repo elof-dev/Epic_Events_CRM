@@ -2,7 +2,7 @@ from app.services.customer_service import CustomerService
 import click
 from cli.helpers import prompt_menu
 from app.db.transaction import transactional
-from sentry_sdk import capture_exception
+from sentry import report_exception
 
 class CustomersView:
     """
@@ -60,7 +60,7 @@ class CustomersView:
                 new_customer = cust_service.create(user, **fields)
             self.click.echo(f'Client créé id={new_customer.id}')
         except Exception as e:
-            capture_exception(e)
+            report_exception(e)
             self.click.echo(f'Erreur création: {e}')
 
     def update_customer(self, user, customer_id):
@@ -94,6 +94,7 @@ class CustomersView:
                 self.click.echo('Client mis à jour')
                 customer = self.session.get(Customer, customer_id)
             except Exception as e:
+                report_exception(e)
                 self.click.echo(f'Erreur mise à jour: {e}')
 
     def delete_customer(self, user, customer_id):
@@ -110,6 +111,7 @@ class CustomersView:
                     cust_service.delete(user, customer.id)
                 self.click.echo('Client supprimé')
         except Exception as e:
+            report_exception(e)
             self.click.echo(f'Erreur: {e}')
 
     def list_all_customers(self, user):
@@ -122,6 +124,7 @@ class CustomersView:
                 return
             self.display_detail_customers(user, choice)
         except Exception as e:
+            report_exception(e)
             self.click.echo(f'Erreur: {e}')
 
     def my_customers(self, user):
@@ -135,6 +138,7 @@ class CustomersView:
                 return
             self.display_detail_customers(user, choice)
         except Exception as e:
+            report_exception(e)
             self.click.echo(f'Erreur: {e}')
 
     def display_detail_customers(self, user, customer_id):

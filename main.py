@@ -1,7 +1,7 @@
 import click
 from cli.crm_interface import run_interface
 from app.db import init_db as init_db_module
-import cli.sentry as sentry_module
+import sentry as sentry_module
 
 @click.group()
 def cli():
