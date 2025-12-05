@@ -25,10 +25,11 @@ class ContractService:
     def create(self, user, **fields) -> Contract:
         if not self.perm.user_has_permission(user, 'contract:create'):
             raise PermissionError("Permission refusée")
+        # assigne automatiquement l'utilisateur gestionnaire si le rôle est "management"
         if not fields.get('user_management_id'):
             if getattr(getattr(user, 'role', None), 'name', None) == 'management':
                 fields['user_management_id'] = getattr(user, 'id', None)
-
+        # valide les champs fournis via Pydantic
         try:
             validated = ContractCreate(**fields).model_dump()
         except ValidationError as exc:
@@ -90,7 +91,7 @@ class ContractService:
             raise ValueError("Contrat non trouvé")
 
 
-        # refuse deletion if contract has events
+        # vérifie que le contrat n'est pas référencé par des évènements
         from app.models.event import Event
         events_count = self.session.query(Event).filter(Event.contract_id == contract_id).count()
         if events_count > 0:
@@ -120,7 +121,6 @@ class ContractService:
 
     # ---- helpers ----
     def _normalize(self, validated: dict) -> dict:
-        # currently no string fields to strip, but keep hook for future
         return validated
 
     def _ensure_sales_contract_owner(self, contract, user) -> None:

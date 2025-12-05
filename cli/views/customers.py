@@ -132,8 +132,8 @@ class CustomersView:
         cust_service = CustomerService(self.session, self.perm_service)
         try:
             customers = cust_service.list_mine(user)
-            self.click.echo('\nListe de mes clients:')
-            customer_options = [(f"{c.id}: {c.customer_first_name} {c.customer_last_name}", c.id) for c in customers]
+            self.click.echo('\n=== Liste des clients ===\n-> Choisir un client pour afficher les détails\n')
+            customer_options = [(f"ID {c.id}: {c.customer_first_name} {c.customer_last_name} - Entreprise: {c.company_name} - Commercial ID: {c.user_sales_id}" , c.id) for c in customers]
             choice = self.prompt_menu(customer_options, prompt='Choisir client', empty_message="Vous n'avez pas encore de client")
             if choice is None:
                 return

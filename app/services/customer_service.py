@@ -61,6 +61,7 @@ class CustomerService:
             raise ValueError('Violation de contrainte en base (doublon possible)') from exc
 
     def update(self, user, customer_id: int, **fields) -> Customer:
+        # récupère le client à modifier
         customer = self.repo.get_by_id(customer_id)
         if not customer:
             raise ValueError("Client non trouvé")

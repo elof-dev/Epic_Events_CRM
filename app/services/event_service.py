@@ -35,13 +35,16 @@ class EventService:
     """
 
     def __init__(self, session, permission_service) -> None:
+        # initialisation du service avec la session DB et le service de permissions
         self.session = session
         self.repo = EventRepository(session)
         self.perm = permission_service
 
     def create(self, user, **fields) -> Event:
+        # vérifie que l'utilisateur a la permission de créer un événement
         if not self.perm.user_has_permission(user, "event:create"):
             raise PermissionError("Permission refusée")
+        # valide les champs fournis via Pydantic
         try:
             validated = EventCreate(**fields).model_dump()
         except ValidationError as exc:
@@ -73,40 +76,8 @@ class EventService:
         event = self.repo.get_by_id(event_id)
         if not event:
             raise ValueError("Événement non trouvé")
-        # contrôles d'appartenance et restrictions de champs selon le rôle :
-        role_name = None
-        try:
-            role_name = getattr(user, 'role').name
-        except Exception:
-            # tenter de charger le rôle de l'utilisateur depuis la BDD si l'appelant est un DTO sans rôle
-            try:
-                from app.models.user import User as UserModel
-
-                if getattr(user, 'id', None) is not None:
-                    u = self.session.query(UserModel).filter(UserModel.id == user.id).one_or_none()
-                    role_name = getattr(u.role, 'name', None) if u else None
-            except Exception:
-                role_name = None
-
-        keys = list(fields.keys())
-
-        # support : ne peut modifier que les événements qui lui sont assignés et ne peut pas changer `user_support_id`
-        if role_name == 'support':
-            if getattr(event, 'user_support_id', None) != getattr(user, 'id', None):
-                raise PermissionError('Permission refusée: événement non assigné à ce support')
-            if 'user_support_id' in keys:
-                raise PermissionError('Support ne peut pas réassigner le champ user_support_id')
-
-        # management : peut modifier n'importe quel événement mais uniquement le champ `user_support_id`
-        if role_name == 'management':
-            allowed = {'user_support_id'}
-            if any(k not in allowed for k in keys):
-                raise PermissionError('Management ne peut mettre à jour que le champ user_support_id')
-
-
-        # sinon : vérification générique des permissions pour les autres rôles
-        if role_name not in ('support', 'management', 'sales') and not self.perm.user_has_permission(user, "event:update"):
-            raise PermissionError("User not allowed to update this event")
+        role_name = self._resolve_role_name(user)
+        self._check_role_update_permissions(role_name, event, fields, user)
 
         # valider les champs fournis via Pydantic
         try:
@@ -116,24 +87,7 @@ class EventService:
             messages = "; ".join(f"{'.'.join(map(str, e.get('loc', [])))}: {e.get('msg')}" for e in errors)
             raise ValueError(f"Données invalides : {messages}") from exc
 
-        # s'assurer que le contrat/client référencé (si modifié) existent et sont cohérents
-        if 'contract_id' in validated:
-            from app.repositories.contract_repository import ContractRepository as CR
-
-            c = CR(self.session).get_by_id(validated.get('contract_id'))
-            if not c:
-                raise ValueError('Contract not found')
-
-        if 'customer_id' in validated:
-            self._ensure_customer_exists(validated.get('customer_id'))
-
-        # si l'un ou les deux sont fournis, s'assurer que contract.customer_id correspond au customer_id
-        new_contract_id = validated.get('contract_id', getattr(event, 'contract_id', None))
-        new_customer_id = validated.get('customer_id', getattr(event, 'customer_id', None))
-        if new_contract_id is not None and new_customer_id is not None:
-            cr = ContractRepository(self.session).get_by_id(new_contract_id)
-            if not cr or cr.customer_id != new_customer_id:
-                raise ValueError('contract_id does not belong to the given customer_id')
+        self._validate_contract_customer_consistency(event, validated)
 
         try:
             return self.repo.update(event, **validated)
@@ -167,6 +121,56 @@ class EventService:
         return []
 
     # ---- fonctions utilitaires ----
+    def _resolve_role_name(self, user) -> Optional[str]:
+        try:
+            return getattr(user, 'role').name
+        except Exception:
+            try:
+                from app.models.user import User as UserModel
+
+                if getattr(user, 'id', None) is not None:
+                    u = self.session.query(UserModel).filter(UserModel.id == user.id).one_or_none()
+                    return getattr(u.role, 'name', None) if u else None
+            except Exception:
+                return None
+        return None
+
+    def _check_role_update_permissions(self, role_name: Optional[str], event: Event, fields: dict, user) -> None:
+        keys = list(fields.keys())
+        if role_name == 'support':
+            if getattr(event, 'user_support_id', None) != getattr(user, 'id', None):
+                raise PermissionError('Permission refusée: événement non assigné à ce support')
+            if 'user_support_id' in keys:
+                raise PermissionError('Support ne peut pas réassigner le champ user_support_id')
+            return
+
+        if role_name == 'management':
+            allowed = {'user_support_id'}
+            if any(k not in allowed for k in keys):
+                raise PermissionError('Management ne peut mettre à jour que le champ user_support_id')
+            return
+
+        if role_name != 'sales' and not self.perm.user_has_permission(user, "event:update"):
+            raise PermissionError("User not allowed to update this event")
+
+    def _validate_contract_customer_consistency(self, event: Event, validated: dict) -> None:
+        if 'contract_id' in validated:
+            from app.repositories.contract_repository import ContractRepository as CR
+
+            c = CR(self.session).get_by_id(validated.get('contract_id'))
+            if not c:
+                raise ValueError('Contract not found')
+
+        if 'customer_id' in validated:
+            self._ensure_customer_exists(validated.get('customer_id'))
+
+        new_contract_id = validated.get('contract_id', getattr(event, 'contract_id', None))
+        new_customer_id = validated.get('customer_id', getattr(event, 'customer_id', None))
+        if new_contract_id is not None and new_customer_id is not None:
+            cr = ContractRepository(self.session).get_by_id(new_contract_id)
+            if not cr or cr.customer_id != new_customer_id:
+                raise ValueError('contract_id does not belong to the given customer_id')
+
     def _ensure_customer_exists(self, customer_id: Optional[int]) -> None:
         if not customer_id:
             raise ValueError('customer_id est requis')

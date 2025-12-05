@@ -12,6 +12,7 @@ class UsersView:
     en fonction de leurs permissions.
     """
     def __init__(self, session, perm_service) -> None:
+        # initialisation de la vue avec la session DB et le service de permissions
         self.session = session
         self.perm_service = perm_service
         self.prompt_menu = prompt_menu
@@ -20,6 +21,7 @@ class UsersView:
     def main_user_menu(self, user) -> None:
         while True:
             self.click.echo('\n=== Gestion des utilisateurs ===')
+            # affiche le menu principal selon les permissions de l'utilisateur
             options = self.get_user_menu_options(user)
             action = self.prompt_menu(options, prompt='Choix')
             if action is None:
@@ -34,6 +36,7 @@ class UsersView:
     def get_user_menu_options(self, user) -> list:
         
         options = []
+        # appelle le service de permissions pour vérifier les droits
         if self.perm_service.user_has_permission(user, 'user:read'):
             options.append(('Afficher tous les utilisateurs', 'list_all'))
             options.append(('Filtrer par ID', 'filter_id'))
@@ -44,6 +47,7 @@ class UsersView:
 
 
     def create_user(self, user) -> None:
+        # initialise le service utilisateur
         user_service = UserService(self.session, self.perm_service)
         try:
             first = self.click.prompt('Prénom')
@@ -52,6 +56,7 @@ class UsersView:
             email = self.click.prompt('Email')
             phone = self.click.prompt('Téléphone')
 
+            # sélection du rôle depuis les rôles disponibles en base
             from app.models.role import Role
             roles = self.session.query(Role).all()
             if not roles:
@@ -63,6 +68,7 @@ class UsersView:
                 self.click.echo('Annulé')
                 return
 
+            # saisie du mot de passe cachée
             password = self.click.prompt('Mot de passe', hide_input=True)
             fields = {
                 'user_first_name': first,
@@ -73,7 +79,10 @@ class UsersView:
                 'role_id': role_id,
                 'password': password,
             }
+            # enveloppe la création dans une transaction
+            # afin d'annuler en cas d'erreur
             with transactional(self.session):
+                # appelle le service utilisateur pour créer l'utilisateur
                 new_user = user_service.create(user, **fields)
             self.click.echo(f'Utilisateur créé id={new_user.id}')
         except Exception as e:

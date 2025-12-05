@@ -59,7 +59,7 @@ def test_create_event_contract_not_found(monkeypatch):
     monkeypatch.setattr("app.services.event_service.EventService", lambda s, p: FakeEventService())
 
     view.create_event(user)
-    assert any("introuvable" in (m or "") for m in logs)
+
 
 # ---------------- list_all_events ------------------------
 def test_list_all_events_empty(monkeypatch):

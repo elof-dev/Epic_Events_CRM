@@ -18,8 +18,10 @@ class EventsView:
         self.click = click
 
     def main_event_menu(self, user):
+        # boucle principale du menu évènements
         while True:
             self.click.echo('\n=== Gestion des évènements ===')
+            # affiche le menu principal selon les permissions de l'utilisateur
             options = self.get_event_menu_options(user)
             action = self.prompt_menu(options, prompt='Choix')
             if action is None:
@@ -34,6 +36,7 @@ class EventsView:
                 self.events_without_support(user)
 
     def get_event_menu_options(self, user):
+        # génère les options de menu en fonction des permissions et du rôle de l'utilisateur
         options = []
         if self.perm_service.user_has_permission(user, 'event:read'):
             options.append(('Afficher tous les évènements', 'all'))
@@ -47,7 +50,9 @@ class EventsView:
 
 
     def create_event(self, user):
+        # initialise le service évènement
         event_service = EventService(self.session, self.perm_service)
+        # collecte les informations nécessaires à la création
         try:
             contract_id = self.click.prompt('ID du contrat lié')
             customer_id = self.click.prompt('ID du client lié')
@@ -70,6 +75,7 @@ class EventsView:
                 'user_support_id': support_id or None,
             }
             from app.models.contract import Contract
+            # vérifie que le contrat existe et est signé
             contract = self.session.get(Contract, contract_id)
             if not contract:
                 self.click.echo('Contrat introuvable ou non accessible')
@@ -77,6 +83,7 @@ class EventsView:
             if not contract.signed or contract.customer.user_sales_id != user.id:
                 self.click.echo("Impossible de créer l'évènement: le contrat doit être signé et appartenir au commercial")
                 return
+            # crée l'évènement en base
             with transactional(self.session):
                 new_e = event_service.create(user, **fields)
             self.click.echo(f'Evènement créé id={new_e.id}')
@@ -100,6 +107,7 @@ class EventsView:
 
     def my_events(self, user):
         event_service = EventService(self.session, self.perm_service)
+        # récupère les évènements liés à l'utilisateur selon son rôle
         try:
             role_name = getattr(getattr(user, 'role', None), 'name', None)
             if role_name == 'support':

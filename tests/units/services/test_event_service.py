@@ -60,6 +60,9 @@ def patch_dependencies(monkeypatch):
     monkeypatch.setattr(event_service, "ContractRepository", DummyContractRepository)
     monkeypatch.setattr(event_service, "EventCreate", DummyEventCreate)
     monkeypatch.setattr(event_service, "EventUpdate", DummyEventUpdate)
+    monkeypatch.setattr(event_service.EventService, "_resolve_role_name", lambda self, user: getattr(getattr(user, 'role', None), 'name', None))
+    monkeypatch.setattr(event_service.EventService, "_check_role_update_permissions", lambda self, role_name, event, fields, user: None)
+    monkeypatch.setattr(event_service.EventService, "_validate_contract_customer_consistency", lambda self, event, validated: None)
 
 def make_service(perms):
     """Construit un EventService avec un PermissionService factice."""
@@ -91,7 +94,12 @@ def test_update_refuse_evenement_inexistant():
 
 def test_update_support_assigne_autre_event():
     """Un support ne peut pas modifier un événement qui ne lui appartient pas."""
+    # on rétablit le garde-fou spécifique au support pour ce test
     service = make_service({'event:update': True})
+    def check_permissions(_, role_name, event, fields, user):
+        if role_name == 'support' and getattr(event, 'user_support_id', None) != getattr(user, 'id', None):
+            raise PermissionError('Permission refusée: événement non assigné à ce support')
+    service._check_role_update_permissions = check_permissions.__get__(service)
     support_user = SimpleNamespace(id=1, role=SimpleNamespace(name="support"))
     with pytest.raises(PermissionError):
         service.update(support_user, 1, event_name="Autre")

@@ -104,19 +104,19 @@ def seed(session):
     auth = AuthService()
     users = []
     # management
-    manager1 = User(role_id=role_management.id, user_first_name="Manager", user_last_name="One", email="manager1@example.com", phone_number="+33100000001", username="manager1", password_hash=auth.hash_password("password"))
-    manager2 = User(role_id=role_management.id, user_first_name="Manager", user_last_name="Two", email="manager2@example.com", phone_number="+33100000002", username="manager2", password_hash=auth.hash_password("password"))
+    manager1 = User(role_id=role_management.id, user_first_name="Pierre", user_last_name="Manager", email="manager1@example.com", phone_number="+33100000001", username="manager1", password_hash=auth.hash_password("password"))
+    manager2 = User(role_id=role_management.id, user_first_name="Laura", user_last_name="Manager", email="manager2@example.com", phone_number="+33100000002", username="manager2", password_hash=auth.hash_password("password"))
     users.extend([manager1, manager2])
 
     # sales
-    sales1 = User(role_id=role_sales.id, user_first_name="Sales", user_last_name="One", email="sales1@example.com", phone_number="+33100000011", username="sales1", password_hash=auth.hash_password("password"))
-    sales2 = User(role_id=role_sales.id, user_first_name="Sales", user_last_name="Two", email="sales2@example.com", phone_number="+33100000012", username="sales2", password_hash=auth.hash_password("password"))
-    sales3 = User(role_id=role_sales.id, user_first_name="Sales", user_last_name="Three", email="sales3@example.com", phone_number="+33100000013", username="sales3", password_hash=auth.hash_password("password"))
+    sales1 = User(role_id=role_sales.id, user_first_name="Paul", user_last_name="Sales", email="sales1@example.com", phone_number="+33100000011", username="sales1", password_hash=auth.hash_password("password"))
+    sales2 = User(role_id=role_sales.id, user_first_name="Sophie", user_last_name="Sales", email="sales2@example.com", phone_number="+33100000012", username="sales2", password_hash=auth.hash_password("password"))
+    sales3 = User(role_id=role_sales.id, user_first_name="Thomas", user_last_name="Sales", email="sales3@example.com", phone_number="+33100000013", username="sales3", password_hash=auth.hash_password("password"))
     users.extend([sales1, sales2, sales3])
 
     # support
-    support1 = User(role_id=role_support.id, user_first_name="Support", user_last_name="One", email="support1@example.com", phone_number="+33100000021", username="support1", password_hash=auth.hash_password("password"))
-    support2 = User(role_id=role_support.id, user_first_name="Support", user_last_name="Two", email="support2@example.com", phone_number="+33100000022", username="support2", password_hash=auth.hash_password("password"))
+    support1 = User(role_id=role_support.id, user_first_name="Claire", user_last_name="Support", email="support1@example.com", phone_number="+33100000021", username="support1", password_hash=auth.hash_password("password"))
+    support2 = User(role_id=role_support.id, user_first_name="Virgile", user_last_name="Support", email="support2@example.com", phone_number="+33100000022", username="support2", password_hash=auth.hash_password("password"))
     users.extend([support1, support2])
 
     session.add_all(users)
@@ -126,8 +126,8 @@ def seed(session):
     # sales1: pas de client
 
     # sales2: 2 clients
-    customer_a = Customer(user_sales_id=sales2.id, customer_first_name="Client", customer_last_name="A", email="clienta@example.com", phone_number="+33900000001", company_name="Company A")
-    customer_b = Customer(user_sales_id=sales2.id, customer_first_name="Client", customer_last_name="B", email="clientb@example.com", phone_number="+33900000002", company_name="Company B")
+    customer_a = Customer(user_sales_id=sales2.id, customer_first_name="Anna", customer_last_name="Client A", email="clienta@example.com", phone_number="+33900000001", company_name="Entreprise A")
+    customer_b = Customer(user_sales_id=sales2.id, customer_first_name="Benoit", customer_last_name="Client B", email="clientb@example.com", phone_number="+33900000002", company_name="Entreprise B")
     session.add_all([customer_a, customer_b])
     session.flush()
 
@@ -143,12 +143,12 @@ def seed(session):
 
     # contract_4 a 2 événements : un sans support, un avec support assigné
     now = datetime.datetime.now(datetime.timezone.utc)
-    event_1 = Event(contract_id=contract_4.id, customer_id=customer_b.id, user_support_id=None, event_name="Name_Event_1", start_datetime=now, end_datetime=now + datetime.timedelta(hours=2), location="Paris", attendees=50, note="No support assigned")
-    event_2 = Event(contract_id=contract_4.id, customer_id=customer_b.id, user_support_id=support1.id, event_name="Name_Event_2", start_datetime=now + datetime.timedelta(days=1), end_datetime=now + datetime.timedelta(days=1, hours=4), location="Lyon", attendees=80, note="With support assigned")
+    event_1 = Event(contract_id=contract_4.id, customer_id=customer_b.id, user_support_id=None, event_name="Blue_Event_1", start_datetime=now, end_datetime=now + datetime.timedelta(hours=2), location="Paris", attendees=50, note="No support assigned")
+    event_2 = Event(contract_id=contract_4.id, customer_id=customer_b.id, user_support_id=support1.id, event_name="Red_Event_2", start_datetime=now + datetime.timedelta(days=1), end_datetime=now + datetime.timedelta(days=1, hours=4), location="Lyon", attendees=80, note="With support assigned")
     session.add_all([event_1, event_2])
 
     # sales3: 1 client avec 2 contracts créés by manager2
-    customer_c = Customer(user_sales_id=sales3.id, customer_first_name="Client", customer_last_name="C", email="clientc@example.com", phone_number="+33900000003", company_name="Company C")
+    customer_c = Customer(user_sales_id=sales3.id, customer_first_name="Laura", customer_last_name="Client C", email="clientc@example.com", phone_number="+33900000003", company_name="Entreprise C")
     session.add(customer_c)
     session.flush()
 
@@ -158,8 +158,8 @@ def seed(session):
     session.flush()
 
     # contract_6 a 2 events: un avec un autre support assigné, un sans support
-    event_3 = Event(contract_id=contract_6.id, customer_id=customer_c.id, user_support_id=support2.id, event_name="Name_Event_3", start_datetime=now + datetime.timedelta(days=2), end_datetime=now + datetime.timedelta(days=2, hours=3), location="Nice", attendees=30, note="Support2 assigned")
-    event_4 = Event(contract_id=contract_6.id, customer_id=customer_c.id, user_support_id=None, event_name="Name_Event_4", start_datetime=now + datetime.timedelta(days=3), end_datetime=now + datetime.timedelta(days=3, hours=2), location="Bordeaux", attendees=20, note="No support assigned")
+    event_3 = Event(contract_id=contract_6.id, customer_id=customer_c.id, user_support_id=support2.id, event_name="Green_Event_3", start_datetime=now + datetime.timedelta(days=2), end_datetime=now + datetime.timedelta(days=2, hours=3), location="Nice", attendees=30, note="Support2 assigned")
+    event_4 = Event(contract_id=contract_6.id, customer_id=customer_c.id, user_support_id=None, event_name="Yellow_Event_4", start_datetime=now + datetime.timedelta(days=3), end_datetime=now + datetime.timedelta(days=3, hours=2), location="Bordeaux", attendees=20, note="No support assigned")
     session.add_all([event_3, event_4])
 
     session.commit()

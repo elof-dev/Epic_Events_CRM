@@ -18,6 +18,7 @@ class PermissionService(Permission):
     """
 
     def __init__(self, session):
+        # initialisation du service avec la session DB
         self.session = session
 
     def user_has_permission(self, user, permission_name: str) -> bool:
@@ -26,17 +27,18 @@ class PermissionService(Permission):
         Par exemple, "customer:create", "contract:read", etc.
         Retourne True si l'utilisateur a la permission, False sinon.
         """
+        # vérifie que l'utilisateur est authentifié
         if not self._is_authenticated(user):
             return False
+        # parcourt les permissions associées au rôle de l'utilisateur
         for permission in user.role.permissions:
+            # vérifie si le nom de la permission correspond à celui recherché
             if permission.name == permission_name:
                 return True
         return False
 
     def _is_authenticated(self, user) -> bool:
-        """Détection simple d'authentification : un utilisateur est considéré
-        authentifié si l'objet `user` existe et possède un `id` non vide.
-        """
+        # vérifie que l'utilisateur n'est pas None et a un ID valide
         return user is not None and getattr(user, 'id', None) is not None
 
     def available_menus_for_user(self, user) -> List[str]:

@@ -5,7 +5,7 @@ from app.db.config import JWT_SECRET, JWT_ALGORITHM, JWT_EXP_SECONDS
 
 
 class AuthService:
-    """Service d'authentification minimal.
+    """Service d'authentification.
 
     Rôle : fournir des utilitaires pour le hachage et la vérification des
     mots de passe, ainsi que la création et le décodage de tokens JWT.

@@ -18,55 +18,59 @@ class UserService:
     """
 
     def __init__(self, session, permission_service) -> None:
+        # initialisation du service avec la session DB et le service de permissions
         self.session = session
         self.repo = UserRepository(session)
         self.perm = permission_service
         self.auth = AuthService()
 
     def create(self, current_user, **fields) -> User:
-        # check permissions
+        # vérifie les permissions
         if not self.perm.user_has_permission(current_user, 'user:create'):
-            raise PermissionError('Permission refuseée')
-        # validate incoming data via Pydantic (ensures required fields and basic types)
+            raise PermissionError('Permission refusée')
+        # valide les champs fournis via la couche Pydantic
         try:
             validated = UserCreate(**fields).model_dump()
         except ValidationError as exc:
             errors = exc.errors()
             messages = "; ".join(f"{'.'.join(map(str, e.get('loc', [])))}: {e.get('msg')}" for e in errors)
             raise ValueError(f"Données invalides: {messages}") from exc
-        # normalize, validate role and uniqueness, hash password
         validated = self._normalize(validated)
         self._ensure_role_exists(validated.get('role_id'))
         self._check_uniqueness(validated)
         self._hash_password_if_present(validated)
 
+        # appel à la couche repository afin de créer l'utilisateur en base
         try:
             return self.repo.create(**validated)
         except IntegrityError as exc:
-            # race condition or DB-level duplicate; rollback and expose friendly message
+            # si un élément en base viole une contrainte (doublon, FK invalide),
+            # rollback de la session càd annulation de la transaction en cours
             self.session.rollback()
             raise ValueError('Violation de contrainte en base (doublon possible)') from exc
 
     def update(self, current_user, user_id: int, **fields) -> User:
         if not self.perm.user_has_permission(current_user, 'user:update'):
             raise PermissionError('Permission refusée')
+        # appelle la couche repository pour récupérer l'utilisateur à modifier 
         u = self.repo.get_by_id(user_id)
         if not u:
             raise ValueError('Utilisateur introuvable')
-        # validate provided fields via Pydantic (coercion + basic checks)
+        
+        # valide les champs fournis via Pydantic
         try:
             validated = UserUpdate(**fields).model_dump(exclude_none=True)
         except ValidationError as exc:
             errors = exc.errors()
             messages = "; ".join(f"{'.'.join(map(str, e.get('loc', [])))}: {e.get('msg')}" for e in errors)
             raise ValueError(f"Données invalides: {messages}") from exc
-        # normalize, validate role (if provided), uniqueness and hash password
         validated = self._normalize(validated)
         if 'role_id' in validated:
             self._ensure_role_exists(validated.get('role_id'))
         self._check_uniqueness(validated, exclude_user_id=u.id)
         self._hash_password_if_present(validated)
 
+        # appelle la couche repository pour mettre à jour l'utilisateur en base
         try:
             return self.repo.update(u, **validated)
         except IntegrityError as exc:
@@ -75,7 +79,6 @@ class UserService:
 
     # ----- helpers -----
     def _normalize(self, validated: dict) -> dict:
-        # trim strings and normalize email/username
         for k in ('username', 'email', 'phone_number'):
             if k in validated and isinstance(validated[k], str):
                 validated[k] = validated[k].strip()
@@ -117,10 +120,7 @@ class UserService:
         u = self.repo.get_by_id(user_id)
         if not u:
             raise ValueError('Utilisateur introuvable')
-        # Conservative behaviour: refuse deletion if the user is referenced
-        # by contracts, events or customers. Provide a clear error message
-        # instead of letting the DB raise IntegrityError and put the
-        # session into a dirty state.
+        # vérifie que l'utilisateur n'est pas référencé sur des contrats, évènements ou clients
         from app.models.contract import Contract
         from app.models.event import Event
         from app.models.customer import Customer
@@ -145,7 +145,6 @@ class UserService:
         try:
             self.repo.delete(u)
         except Exception:
-            # Ensure session is usable after unexpected DB errors
             self.session.rollback()
             raise
 
